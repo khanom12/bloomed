@@ -30,7 +30,7 @@ After the final layout adjustments, the complete single-goal setup → entry →
 
 The final normal-size/light-appearance UI rerun passed **all 3 UI tests**, with no warnings or errors.
 
-A signed arm64 iPhone Debug build also succeeded, and its code signature passed strict verification. Version 0.1.0 (1) was successfully installed on the owner’s intended iPhone Air. Automatic launch is waiting for the phone to be unlocked; the operating system explicitly denied the launch while locked. No other connected device was used as a substitute.
+A signed arm64 iPhone Debug build also succeeded, and its code signature passed strict verification. Version 0.1.0 (1) was successfully installed on the owner’s intended iPhone Air. After the phone was unlocked, the app launched successfully through the device tools. Device installation records confirm version 0.1.0 (1), with the independent bundle identifier `com.khanom12.bloomed`. No other connected device was used as a substitute.
 
 The automated suite covers all 28 authored fixture cases, financial conservation/rounding, bounds, missing versus zero, DST and timezone boundaries, unchanged-term recurrence, settlement corrections, duplicate operations, failed writes, validated backup restoration, and snapshot privacy. UI integration covers the empty four-tab shell, stretch validation, and setup → confirmation → saved walking total → money.
 

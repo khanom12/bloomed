@@ -4,7 +4,7 @@ A native iPhone app for a walking commitment, one week at a time.
 
 Choose a daily step goal, make a personal commitment, and track what you earn back. Optionally add a higher target, a consistency incentive, or a supporter who matches your return up to an agreed weekly cap.
 
-**Version 0.1.0 — first implementation for device testing.** Bloomed calculates and records arrangements. It does not hold money, transfer funds, execute donations, or independently verify walking or payments.
+**Version 0.1.0 — installed and launched on the owner’s iPhone for testing.** Bloomed calculates and records arrangements. It does not hold money, transfer funds, execute donations, or independently verify walking or payments.
 
 ## Open the app project
 
