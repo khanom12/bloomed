@@ -1,0 +1,25 @@
+.DS_Store
+build/
+.build/
+DerivedData/
+*.xcresult/
+xcuserdata/
+*.xcuserstate
+.xcodebuildmcp/
+*.mobileprovision
+*.p12
+*.cer
+*.ipa
+.env
+.env.*
+!*.example
+artifacts/
+Bloomed-backup*.json
+Bloomed-before-restore*.json
+
+# Local discovery history is not part of the portable implementation bundle.
+docs/archive/
+docs/EXPLORATION-LOG.md
+docs/CONCEPT.md
+docs/DECISIONS.md
+docs/FIRST-ITERATION.md
