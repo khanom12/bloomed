@@ -26,7 +26,7 @@ Do not present deposit, payout, live monitoring, activity verification, or donat
 
 Use warm neutral surfaces, dark evergreen text, a restrained green accent, generous spacing, and a strong typographic hierarchy. Botanical cues may appear as small, original line motifs or native shapes. Essential status must remain understandable without decoration.
 
-Use a text wordmark, `Bloomed`, until a final identity is supplied. Do not invent a final logo, copy another app's assets, add stock fitness imagery, or make a decorative plant die after a missed day. Avoid a separate illustrated hero taking priority over step entry.
+The owner requested a simple identity and its integration on October 24, 2026. Use the Open loop identity in [the brand kit](../Brand/v1/README.md): an open-b symbol, outlined lowercase wordmark, and a small family of route/loop motifs. Reserve the full lockup for the Today header, shared summary, and About section. Use restrained decorative artwork in the walking and progress empty states; native symbols remain appropriate for controls and financial records. Do not make a decorative plant die after a missed day or give an illustrated hero priority over step entry.
 
 ### 2.2 Semantic colors
 

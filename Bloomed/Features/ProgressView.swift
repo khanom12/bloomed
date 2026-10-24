@@ -11,7 +11,7 @@ struct WalkingProgressView: View {
                     ActivityWeekCard(plan: plan)
                 }
                 if store.plans.isEmpty {
-                    BEmptyState(title: "Room for your story.", message: "Your recorded steps and weekly goals will appear here after you create a plan.", symbol: "chart.bar.xaxis")
+                    BEmptyState(title: "Room for your story.", message: "Your recorded steps and weekly goals will appear here after you create a plan.", illustration: .progress)
                 } else {
                     BSectionTitle(title: "Your weeks")
                     ForEach(store.plans) { plan in

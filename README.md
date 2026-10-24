@@ -32,6 +32,10 @@ There is no login or cloud service. Supporter agreements are entered by the part
 
 The app opens empty. UI tests use an isolated in-memory repository and do not seed ordinary app launches.
 
+## Brand assets
+
+The [Open loop identity kit](Brand/v1/README.md) contains the logo, icon, and companion artwork in SVG, PDF, and PNG, plus an overview sheet and licensed type source. The app uses lightweight template PDF vectors that follow its existing light/dark colors. Regenerate production artwork with `swift scripts/GenerateBrand.swift`.
+
 ## Rules implemented
 
 The detailed baseline remains [PRD v0.1](docs/PRD.md). Its proposed defaults are used consistently: CAD, seven pinned local dates, a positive personal commitment, optional stretch, optional consistency on any five dates, and one optional 1:1 weekly match.
@@ -51,7 +55,7 @@ Goals, limits, allocations, and the initial visual identity remain product defau
 | `Bloomed/Services` | Privacy-controlled snapshot content |
 | `BloomedTests` | Numerical, lifecycle, correction, persistence, and sharing tests |
 | `BloomedUITests` | Onboarding and daily-use integration tests |
-| `scripts` | Reproducible Xcode project and original draft icon generation |
+| `scripts` | Reproducible Xcode project and vector brand asset generation |
 
 Storage uses a versioned, validated Codable graph written atomically to Application Support. A mutation becomes visible only after its complete save succeeds. This deliberately implements the spec's persistence contract using an atomic JSON adapter rather than its suggested SwiftData adapter: source revisions, assessments, ledger events, and audit records commit together, and restore uses the same validation. The Foundation-only domain does not depend on the storage choice. A larger future dataset can adopt another repository without redefining the reward rules.
 

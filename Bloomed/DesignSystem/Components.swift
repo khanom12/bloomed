@@ -32,13 +32,20 @@ struct BEmptyState: View {
     let title: String
     let message: String
     var symbol = "leaf"
+    var illustration: BBrandIllustration? = nil
     var actionTitle: String? = nil
     var action: (() -> Void)? = nil
 
     var body: some View {
         BCard {
-            Image(systemName: symbol).font(.system(size: 32, weight: .light))
-                .foregroundStyle(BTheme.accent).accessibilityHidden(true)
+            if let illustration {
+                BBrandArtwork(kind: illustration)
+                    .frame(width: 120, height: 72, alignment: .leading)
+                    .accessibilityHidden(true)
+            } else {
+                Image(systemName: symbol).font(.system(size: 32, weight: .light))
+                    .foregroundStyle(BTheme.accent).accessibilityHidden(true)
+            }
             Text(title).font(.title2.weight(.semibold)).foregroundStyle(BTheme.ink)
             Text(message).font(.body).foregroundStyle(BTheme.secondary)
             if let actionTitle, let action { BPrimaryButton(title: actionTitle, action: action) }
@@ -100,7 +107,11 @@ struct BScreenHeader: View {
     let subtitle: String
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(eyebrow.uppercased()).font(.caption.weight(.semibold)).tracking(1.5).foregroundStyle(BTheme.secondary)
+            if eyebrow == "Bloomed" {
+                BBrandLockup().foregroundStyle(BTheme.accent)
+            } else {
+                Text(eyebrow.uppercased()).font(.caption.weight(.semibold)).tracking(1.5).foregroundStyle(BTheme.secondary)
+            }
             Text(title).font(.largeTitle.weight(.bold)).tracking(-0.7).foregroundStyle(BTheme.ink)
             Text(subtitle).font(.body).foregroundStyle(BTheme.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading)

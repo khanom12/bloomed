@@ -296,7 +296,7 @@ struct PlanEditorView: View {
                     PlanValueRow(title: "Your commitment", value: Money.format(plan.terms.commitmentCents))
                     Text("Your agreement has been saved. No money has moved.").font(.subheadline).foregroundStyle(BTheme.secondary)
                 }
-                Button("Done") { dismiss() }.buttonStyle(.borderedProminent).tint(BTheme.accent).frame(minHeight: 52)
+                Button("Done") { dismiss() }.buttonStyle(.borderedProminent).tint(BTheme.accent).foregroundStyle(BTheme.onAccent).frame(minHeight: 52)
                 Button("Invite a supporter · optional") { showSupport = true }.frame(minHeight: 44)
             }.padding(24)
         }.interactiveDismissDisabled(false)

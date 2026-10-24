@@ -24,7 +24,7 @@ struct ShareSnapshotView: View {
                         if kind == .progress { Toggle("Include financial details", isOn: $includeMoney).tint(BTheme.accent) }
                         BNotice(message: "Only this week is included. Your private reason and notes stay private. Recipients can keep or forward shared files; Bloomed cannot revoke them.")
                         let content = SnapshotService.content(plan: plan, store: store, kind: kind, includeMoney: includeMoney, at: asOf)
-                        SnapshotCard(content: content).environment(\.colorScheme, .light)
+                        SnapshotCard(content: content).environment(\.colorScheme, .light).dynamicTypeSize(.large)
                             .clipShape(RoundedRectangle(cornerRadius: 20))
                         if let error { BErrorText(message: error) }
                         BPrimaryButton(title: "Share snapshot", action: share)
@@ -46,10 +46,10 @@ struct ShareSnapshotView: View {
             return
         }
         let content = SnapshotService.content(plan: plan, store: store, kind: kind, includeMoney: includeMoney, at: asOf)
-        let renderer = ImageRenderer(content: SnapshotCard(content: content).frame(width: 390).environment(\.colorScheme, .light))
+        let renderer = ImageRenderer(content: SnapshotCard(content: content).frame(width: 390).environment(\.colorScheme, .light).dynamicTypeSize(.large))
         renderer.scale = 3
         guard let image = renderer.uiImage else { error = "The image couldn't be prepared. Please try again."; return }
-        activity = ShareActivity(items: [content.text, image])
+        activity = ShareActivity(items: [image, content.text])
     }
 }
 
@@ -58,10 +58,10 @@ private struct SnapshotCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Label("Bloomed", systemImage: "leaf").font(.title2.weight(.bold))
+                BBrandLockup()
                 Spacer()
                 Text(content.kind.rawValue).font(.caption.weight(.semibold)).multilineTextAlignment(.trailing)
-            }.foregroundStyle(Color(red: 0.14, green: 0.39, blue: 0.29))
+            }.foregroundStyle(Color(red: 35.0 / 255, green: 99.0 / 255, blue: 75.0 / 255))
             if !content.displayName.isEmpty { Text(content.displayName).font(.title2.weight(.semibold)) }
             Text(content.dateRange).font(.headline)
             Text(content.status).font(.subheadline.weight(.semibold))

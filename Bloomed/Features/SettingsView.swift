@@ -38,10 +38,14 @@ struct SettingsView: View {
                     }
                 }
                 Section("About Bloomed") {
+                    BBrandLockup()
+                        .foregroundStyle(BTheme.accent)
+                        .padding(.vertical, 4)
+                        .accessibilityHidden(true)
                     Text("A walking commitment, one week at a time.")
                     Text("Manual activity records. External money and verification. Bloomed does not upload your records. Device backups may include app data according to your iOS settings.")
                         .font(.subheadline).foregroundStyle(BTheme.secondary)
-                    LabeledContent("Version", value: "0.1.0 · First draft")
+                    LabeledContent("Version", value: versionLabel)
                 }
                 Section {
                     Button("Delete local data", role: .destructive) { confirmingDelete = true }
@@ -78,6 +82,12 @@ struct SettingsView: View {
                 Button("Delete local data", role: .destructive, action: deleteData)
             } message: { Text("This removes plans, walking entries, and financial records from this app. Existing exports and outside obligations are unaffected.") }
         }
+    }
+
+    private var versionLabel: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "\(version) (\(build)) · First draft"
     }
 
     private func savePreferences() {

@@ -13,7 +13,7 @@ struct TodayView: View {
                 } else {
                     BEmptyState(title: "Your next chapter starts with a walk.",
                                 message: "Choose a goal that fits your life. Make a personal commitment, then build your week one day at a time.",
-                                symbol: "figure.walk", actionTitle: "Create your walking plan", action: { sheet = .create })
+                                illustration: .walking, actionTitle: "Create your walking plan", action: { sheet = .create })
                     BNotice(message: "Bloomed records your progress and calculates your returns. All money and donations are arranged outside the app.")
                 }
             }.bloomedScreen()

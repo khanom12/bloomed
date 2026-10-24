@@ -122,7 +122,7 @@ struct WeeklyReviewView: View {
             BStatusBadge(title: "Weekly review saved")
             NavigationLink { MoneyDetailView(planID: plan.id) } label: {
                 Label("Record external settlement", systemImage: "checklist").frame(maxWidth: .infinity, minHeight: 52)
-            }.buttonStyle(.borderedProminent).tint(BTheme.accent)
+            }.buttonStyle(.borderedProminent).tint(BTheme.accent).foregroundStyle(BTheme.onAccent)
             Button { share = true } label: { Label("Share reviewed summary", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity, minHeight: 48) }
             BCard {
                 Text(shouldSuggestProgression(plan) && !progressionDismissed ? "You've been meeting these targets regularly." : "What would you like for next week?").font(.headline)
