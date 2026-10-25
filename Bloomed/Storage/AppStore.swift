@@ -99,11 +99,29 @@ final class AppStore {
 
     @discardableResult
     func beginDraft(repeating plan: WeeklyPlan? = nil) throws -> PlanDraft {
-        if let existing = draft { return existing }
+        if var existing = draft {
+            guard existing.setupFlowVersion == nil || existing.setupFlowVersion == 2 else {
+                throw StoreError.invalid("This saved draft uses an unsupported setup version.")
+            }
+            if existing.setupFlowVersion != 2 {
+                // Preserve the meaning of a saved step from the original setup order.
+                let previousStep = min(max(existing.step, 0), 4)
+                existing.step = [0, 2, 3, 1, 4][previousStep]
+                let hasEverydayGoal = Self.wholeNumber(existing.baseGoalText).map { (1...100_000).contains($0) } ?? false
+                let hasAmount = (try? Money.parseCents(existing.commitmentText)).map { (100...100_000).contains($0) } ?? false
+                let hasHandling = existing.handling == .participantRetains || !existing.handlerDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                if !hasEverydayGoal { existing.step = 0 }
+                else if existing.step > 1, !hasAmount || !hasHandling { existing.step = 1 }
+                existing.setupFlowVersion = 2
+                try saveDraft(existing)
+            }
+            return existing
+        }
         refresh()
         let timezone = plan?.timezoneID ?? TimeZone.current.identifier
         var created = PlanDraft(startDateKey: try WeeklyCalendar.nextAvailableStart(after: plan, among: state.plans,
             now: now, timezoneID: timezone), timezoneID: timezone)
+        created.setupFlowVersion = 2
         created.id = makeID()
         created.createdAt = now
         if let plan {
@@ -113,7 +131,7 @@ final class AppStore {
             created.stretchGoalText = terms.stretchGoalSteps.map(String.init) ?? ""
             created.consistencyEnabled = terms.consistencyEnabled
             created.commitmentText = String(format: "%d.%02d", terms.commitmentCents / 100, terms.commitmentCents % 100)
-            created.charity = terms.charity
+            created.charity = charityDestination(for: plan)
             created.handling = terms.handling
             created.handlerDescription = terms.handlerDescription
         }
@@ -122,12 +140,43 @@ final class AppStore {
         return created
     }
 
+    /// Draft text may be incomplete. The existing confirmed state was validated
+    /// when loaded or last mutated; typing must not re-evaluate its entire history.
     func saveDraft(_ draft: PlanDraft) throws {
-        try transact { candidate in
-            guard candidate.plans.allSatisfy({ $0.id != draft.id }) else { throw StoreError.invalid("An existing commitment cannot be edited as a draft.") }
-            guard TimeZone(identifier: draft.timezoneID) != nil else { throw StoreError.invalid("Choose a valid timezone.") }
+        guard isLoaded else { throw StoreError.unavailable }
+        do {
+            guard state.plans.allSatisfy({ $0.id != draft.id }) else { throw StoreError.invalid("An existing commitment cannot be edited as a draft.") }
+            if state.draft?.id != draft.id {
+                let occupied = draft.id == state.profile.id
+                    || state.stepRevisions.contains { $0.id == draft.id }
+                    || state.supportPeople.contains { $0.id == draft.id }
+                    || state.relationships.contains { $0.id == draft.id }
+                    || state.standingAgreements.contains { $0.id == draft.id }
+                    || state.supportSnapshots.contains { $0.id == draft.id }
+                    || state.assessments.contains { $0.id == draft.id }
+                    || state.financialEvents.contains { $0.id == draft.id }
+                    || state.settlements.contains { $0.id == draft.id }
+                    || state.auditEvents.contains { $0.id == draft.id }
+                    || state.exceptions.contains { $0.id == draft.id }
+                    || (state.charityDestinations ?? []).contains { $0.id == draft.id }
+                guard !occupied else { throw StoreError.invalid("This draft conflicts with an existing saved record.") }
+            }
+            guard TimeZone(identifier: draft.timezoneID) != nil else { throw StoreError.invalid("Choose a valid time zone.") }
             _ = try WeeklyCalendar.date(for: draft.startDateKey, timezoneID: draft.timezoneID)
+            guard (0...4).contains(draft.step), draft.setupFlowVersion == nil || draft.setupFlowVersion == 2 else {
+                throw StoreError.invalid("This saved draft uses an unsupported setup step.")
+            }
+            guard state.draft != draft else { errorMessage = nil; return }
+            refresh()
+            var candidate = state
             candidate.draft = draft
+            let encoded = try Self.encode(candidate, exportedAt: now, compact: true)
+            try repository.save(encoded)
+            state = candidate
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+            throw error
         }
     }
 
@@ -197,6 +246,35 @@ final class AppStore {
         }
     }
 
+    func charityDestination(for plan: WeeklyPlan) -> String {
+        let original = plan.terms.charity.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !original.isEmpty { return original }
+        return state.charityDestinations?.first(where: { $0.planID == plan.id })?.destination ?? ""
+    }
+
+    /// Filling a destination is a separate, audited record. Original weekly terms
+    /// and the financial calculation are never rewritten.
+    func recordCharityDestination(planID: UUID, destination: String, transactionKey: UUID = UUID()) throws {
+        let name = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw StoreError.invalid("Enter a charity or cause.") }
+        try transact { candidate in
+            let plan = candidate.plans[try indexOfPlan(planID, in: candidate)]
+            guard plan.confirmedAt != nil, plan.voidedAt == nil else { throw StoreError.invalid("Choose a confirmed week that has not been cancelled.") }
+            let original = plan.terms.charity.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard original.isEmpty else { throw StoreError.invalid("This week already has a charity destination in its original agreement.") }
+            if let saved = candidate.charityDestinations?.first(where: { $0.planID == planID }) {
+                guard saved.destination == name else { throw StoreError.invalid("This week's charity destination is already recorded and cannot be replaced.") }
+                return
+            }
+            let record = CharityDestinationRecord(id: makeID(), participantID: profile.id, planID: planID,
+                destination: name, recordedAt: now, actorID: profile.id, transactionKey: transactionKey)
+            if candidate.charityDestinations == nil { candidate.charityDestinations = [] }
+            candidate.charityDestinations?.append(record)
+            audit(.charityDestinationRecorded, planID: planID, entityID: record.id,
+                  transactionKey: transactionKey, in: &candidate)
+        }
+    }
+
     func recordSteps(planID: UUID, dateKey: String, total: Int?, reason: String? = nil,
                      expectedTodayKey: String? = nil, transactionKey: UUID = UUID()) throws {
         if state.stepRevisions.contains(where: { $0.transactionKey == transactionKey }) { return }
@@ -234,6 +312,12 @@ final class AppStore {
             }
             guard let index = candidate.assessments.lastIndex(where: { $0.planID == planID }) else { throw StoreError.invalid("The weekly assessment is missing.") }
             if candidate.assessments[index].reviewedAt != nil { return }
+            let destination = plan.terms.charity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? candidate.charityDestinations?.first(where: { $0.planID == planID })?.destination ?? ""
+                : plan.terms.charity
+            guard candidate.assessments[index].result.charityAllocationCents == 0 || !destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw StoreError.invalid("Choose a charity or cause before confirming this review. You arrange the donation outside Bloomed.")
+            }
             let missing = zip(plan.dateKeys, candidate.dailySteps(for: plan)).compactMap { $1 == nil ? $0 : nil }
             guard missing.isEmpty || acknowledgeMissing else {
                 throw StoreError.invalid("Record the missing dates or acknowledge that those dates receive no return.")
@@ -527,9 +611,9 @@ final class AppStore {
         return Int(value)
     }
 
-    private static func encode(_ state: BloomedState, exportedAt: Date) throws -> Data {
+    private static func encode(_ state: BloomedState, exportedAt: Date, compact: Bool = false) throws -> Data {
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.outputFormatting = compact ? [] : [.prettyPrinted, .sortedKeys]
         return try encoder.encode(BackupEnvelope(exportedAt: exportedAt, state: state))
     }
 

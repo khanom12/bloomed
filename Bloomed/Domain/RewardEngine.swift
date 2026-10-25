@@ -49,12 +49,11 @@ enum RewardEngine {
     static func validate(terms: PlanTerms) throws {
         guard terms.ruleVersion == BloomedRule.version else { throw DomainError.invalid("This walking rule version is not supported.") }
         guard terms.currency == BloomedRule.currency else { throw DomainError.invalid("This version supports CAD only.") }
-        guard (1...100_000).contains(terms.baseGoalSteps) else { throw DomainError.invalid("Choose a whole-number base goal between 1 and 100,000 steps.") }
+        guard (1...100_000).contains(terms.baseGoalSteps) else { throw DomainError.invalid("Choose a whole-number everyday goal between 1 and 100,000 steps.") }
         if let stretch = terms.stretchGoalSteps {
-            guard stretch > terms.baseGoalSteps, stretch <= 100_000 else { throw DomainError.invalid("The stretch goal must exceed the base goal and be at most 100,000 steps.") }
+            guard stretch > terms.baseGoalSteps, stretch <= 100_000 else { throw DomainError.invalid("The higher goal must exceed the everyday goal and be at most 100,000 steps.") }
         }
         guard (100...100_000).contains(terms.commitmentCents) else { throw DomainError.invalid("Choose a weekly commitment from CAD 1.00 to CAD 1,000.00.") }
-        guard !terms.charity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw DomainError.invalid("Enter the charity destination agreed for any unearned personal commitment.") }
         guard terms.handling == .participantRetains || !terms.handlerDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw DomainError.invalid("Describe who handles the money outside Bloomed.") }
     }
 

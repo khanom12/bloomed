@@ -56,7 +56,7 @@ struct StepEntryView: View {
     @ViewBuilder private func content(_ plan: WeeklyPlan) -> some View {
         let existing = store.effectiveSteps(planID: planID, dateKey: dateKey)
         let reviewedBefore = store.latestReviewedAssessment(for: plan) != nil
-        BScreenHeader(eyebrow: "MANUALLY RECORDED", title: PlanDisplay.fullDay(dateKey, timezoneID: plan.timezoneID), subtitle: "\(plan.timezoneID.replacingOccurrences(of: "_", with: " ")) · Saving replaces the previous total.")
+        BScreenHeader(eyebrow: "MANUALLY RECORDED", title: PlanDisplay.fullDay(dateKey, timezoneID: plan.timezoneID), subtitle: "\(PlanDisplay.timezoneName(plan.timezoneID)) · Saving replaces the previous total.")
         BCard {
             if clearing {
                 Label("This date will become Not recorded", systemImage: "eraser").font(.headline)
@@ -70,11 +70,11 @@ struct StepEntryView: View {
                 Button("Record zero steps") { text = "0" }.frame(minHeight: 44)
             }
             Divider()
-            PlanValueRow(title: "Base goal", value: "\(plan.terms.baseGoalSteps.formatted()) steps")
-            if let stretch = plan.terms.stretchGoalSteps { PlanValueRow(title: "Stretch goal", value: "\(stretch.formatted()) steps") }
+            PlanValueRow(title: "Everyday goal", value: "\(plan.terms.baseGoalSteps.formatted()) steps")
+            if let stretch = plan.terms.stretchGoalSteps { PlanValueRow(title: "Higher goal", value: "\(stretch.formatted()) steps") }
             if let proposed = proposedAssessment(plan), let index = plan.dateKeys.firstIndex(of: dateKey) {
-                BMoneyRow(title: "Proposed personal return · CAD", cents: proposed.dailyReturnCents[index])
-                Text("Provisional until weekly review. Bloomed does not verify activity or move money.").font(.subheadline).foregroundStyle(BTheme.secondary)
+                BMoneyRow(title: "Earned back for this day · estimate", cents: proposed.dailyReturnCents[index])
+                Text("From your own weekly amount. Review confirms the calculation; Bloomed does not verify walking or move money.").font(.subheadline).foregroundStyle(BTheme.secondary)
             }
         }
         if reviewedBefore, clearing || candidate != existing {

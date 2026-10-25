@@ -1,8 +1,8 @@
 # Bloomed — Acceptance Scenarios and Verification Plan
 
-**Document:** BLM-QA-001 · **Version:** 0.1 · **Date:** 2026-10-24
+**Document:** BLM-QA-001 · **Version:** 0.2 · **Date:** 2026-10-25
 
-**Authority:** [PRD](PRD.md). These scenarios specify expected behavior; they are not a claim that an application or app tests already exist.
+**Authority:** [PRD](PRD.md). These scenarios specify expected behavior; their presence is not evidence that a check ran. Current implementation/test evidence is recorded in the README and implementation notes.
 
 ## 1. Test conventions
 
@@ -29,7 +29,7 @@ Required fixture adapter output: ordered daily maxima, daily returns, qualifying
 | AC-004 | Stretch enabled | Stretch must exceed base; equal/lower rejected; only two levels created |
 | AC-005 | Toggle consistency before confirmation | Same commitment is redistributed; maximum personal return remains C; exact preview updates |
 | AC-006 | Money input | No prefilled stake; accept CAD 1.00–1,000.00; reject excessive precision, negatives, ambiguous parsing, out-of-bounds values |
-| AC-007 | Arrangement incomplete | Confirmation blocked until charity and required money-handler description are supplied |
+| AC-007 | Arrangement incomplete / charity deferred | Required handler description blocks continuation for another holder/arrangement; blank charity alone does not block plan confirmation and is labelled Choose later, without changing the charity allocation rule |
 | AC-008 | Back through onboarding/relaunch | Draft values retained; no commitment or assessment event created yet |
 | AC-009 | Confirm plan twice rapidly | One confirmed week, one confirmation event, no duplicate budget |
 | AC-010 | Confirmation save fails | No success state, partial commitment, or lost draft; retry possible |
@@ -141,6 +141,33 @@ These forecasts hold closed entries unchanged. They must not prevent a later cor
 - **AC-079:** Deleting local data needs explicit confirmation and backup option; exported files and outside obligations are not claimed to be deleted.
 - **AC-080:** No personal activity/financial details in production logs; temporary sharing files cleaned where possible.
 
+### Walkthrough improvement coverage — 2026-10-25
+
+The following are required outcomes, not test-result claims. Use deterministic data and failure injection where relevant.
+
+| ID | Scenario | Expected outcome |
+|---|---|---|
+| AC-081 | Fresh five-screen setup | Everyday goal → weekly amount/arrangement → higher goal → consistency → review; amount known before financial option previews, with the own-money/charity/outside-app mechanism explained |
+| AC-082 | Enable higher goal with C=3500, no consistency | Explicit warning that everyday-only return drops; everyday=125/day and higher=500/day, alternatives not stacked; all-seven-everyday example=875, full return still requires seven higher days |
+| AC-083 | Leave charity blank at setup | Valid amount/handler permits confirmation; original charity remains blank, no invented destination or skipped-allocation policy, Choose later displayed consistently |
+| AC-084 | End unnamed plan with positive charity amount | Review blocked until destination saved; save creates one destination record/audit event without changing original terms, entries, assessment amounts, or financial formula; review then permitted |
+| AC-085 | Review unnamed plan with zero charity, then correct to positive | Initial zero-charity review allowed; corrected positive review blocked until destination exists; earlier review/history retained |
+| AC-086 | Repeat or replace later destination | Same trimmed destination is idempotent; different destination, second record, or a record for originally named/voided/unconfirmed plan rejected; no terms overwrite |
+| AC-087 | Restore destination history | Original schema-v1 file without new optional collection/flow version decodes; additive records round-trip; duplicate plan/transaction, unrelated actor, invalid timing, or positive reviewed unnamed allocation rejected before replacement |
+| AC-088 | Resume an earlier-order saved draft | All entered values preserved; old stage maps to the same conceptual screen in the new order; current flow version recorded; Review remains Review |
+| AC-089 | Type rapidly then Continue/Back/Save & close | Typing saves coalesce; valid transition flushes final text and next stage exactly once, unchanged saves are no-ops, relaunch resumes durable values |
+| AC-090 | Inject draft save failure / discard / confirm | Failure keeps screen/input and retry; close does not claim success; pending autosave cannot recreate a discarded/confirmed draft; failed confirmed mutation leaves recoverable draft |
+| AC-091 | Create/resume from each empty tab | Today, My Plan, Progress, and Money use the same draft and Continue your walking plan label; no duplicate drafts/commitments |
+| AC-092 | Support choice and initial share type | Invite opens Invitation without activating support; Record opens existing-agreement fields; progress opens Progress; reviewed-summary action opens Reviewed; corrections cannot export new values as reviewed |
+| AC-093 | C=3500 and supporter limit=35000 | Explanation shows dollar-for-dollar weekly rule and maximum possible match=3500; higher cap does not multiply it; each eligible confirmed week resets its cap, unused stays with supporter |
+| AC-094 | Calendar and history across changed targets | Missing, explicit zero/below, everyday, higher, future, and no-plan dates remain distinguishable; thresholds are those preserved for each plan; a later goal never reclassifies the earlier record |
+| AC-095 | Nonoverlapping plans share local date key in different zones | Month groups rather than overwrites both records; selected date shows both with saved zones and correct week links; no false absolute-overlap acceptance |
+| AC-096 | Open a historical Progress week | Opens seven-date walking detail with original targets/records first, plus secondary plan/money links; does not route directly to the agreement |
+| AC-097 | Upcoming plan and no reviewed history | Today/Money show readiness/start/goals or possible amounts; no missed future dates, earned-zero dashboard, or empty reviewed-total card; no automatic donation |
+| AC-098 | Estimated/reviewed amounts without outside records | State/period labels remain beside the correct values; no record is not called unpaid; reviewed totals exclude current estimates and preserve last reviewed values during correction |
+| AC-099 | New controls at accessibility sizes / VoiceOver | Footer remains usable with keyboard; validation identifies missing field; native calendar selection has readable date/state/zone detail; charts have dated text equivalents; essential distinctions do not rely on color |
+| AC-100 | Invitation image and text | Personal request, goals, dates, commitment, possible match, next outside conversation, and limits readable in both formats; no private reason/notes or daily activity ledger in invitation; no acceptance/payment claim |
+
 ## 11. Invariant/property verification
 
 Across representative/random valid inputs, assert:
@@ -179,7 +206,7 @@ The documentation package itself was checked before delivery:
 - All 28 authored numerical fixtures matched a separate integer-cent formula evaluation, including every expected daily and aggregate field. An independent reviewer also checked these examples and cross-document consistency.
 - Both documented Toronto daylight-saving weeks were checked using calendar dates and an IANA timezone database: seven dates, respectively 167 and 169 elapsed hours.
 - Forecast examples, correction deltas, capped matching, and remainder-cent examples were checked against the stated rules.
-- All 80 acceptance IDs are unique and contiguous. All 28 fixture IDs are unique.
+- At the original v0.1 delivery, all 80 acceptance IDs were unique and contiguous. All 28 fixture IDs were unique. The v0.2 scenarios below extend coverage; this historical check does not certify the additions.
 - All 38 internal links across the implementation and current continuity documents resolved; referenced section anchors and Markdown code fences were checked.
 - The implementation bundle was checked for portability and independence: no machine-specific paths or references to another product are required.
 - Proposed semantic foreground/background contrast pairs were calculated; actual rendered accessibility remains an implementation check.

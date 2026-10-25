@@ -11,9 +11,9 @@ enum MoneyHandling: String, Codable, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .participantRetains: "I retain the funds"
-        case .anotherPersonHolds: "Another person holds them"
-        case .otherArrangement: "Other external arrangement"
+        case .participantRetains: "I keep the money"
+        case .anotherPersonHolds: "Someone else keeps it"
+        case .otherArrangement: "Another arrangement"
         }
     }
 }
@@ -54,6 +54,7 @@ struct PlanDraft: Codable, Equatable, Identifiable, Sendable {
     var timezoneID: String
     var privateMotivation = ""
     var step = 0
+    var setupFlowVersion: Int? = nil
     var createdAt = Date()
 }
 
@@ -80,7 +81,7 @@ enum PlanStatus: String, Codable, Sendable {
         case .active: "In progress"
         case .awaitingReview: "Awaiting review"
         case .reviewed: "Reviewed"
-        case .voidedBeforeStart: "Voided before start"
+        case .voidedBeforeStart: "Cancelled before start"
         }
     }
 }
@@ -189,10 +190,22 @@ enum FinancialBucket: String, Codable, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .personalReturn: "Your money earned back"
-        case .charityAllocation: "Charity allocation"
-        case .supporterReward: "Supporter rewards earned"
+        case .charityAllocation: "Amount for charity"
+        case .supporterReward: "Supporter match"
         }
     }
+}
+
+/// A destination chosen after confirmation is a separate, immutable record.
+/// Original financial and walking terms remain unchanged.
+struct CharityDestinationRecord: Codable, Equatable, Identifiable, Sendable {
+    var id = UUID()
+    var participantID: UUID
+    var planID: UUID
+    var destination: String
+    var recordedAt: Date
+    var actorID: UUID
+    var transactionKey: UUID
 }
 
 struct FinancialAssessmentEvent: Codable, Equatable, Identifiable, Sendable {
@@ -226,6 +239,7 @@ struct ExternalSettlementRecord: Codable, Equatable, Identifiable, Sendable {
 }
 
 enum AuditAction: String, Codable, Sendable {
+    case charityDestinationRecorded = "CHARITY_DESTINATION_RECORDED"
     case planConfirmed = "PLAN_CONFIRMED"
     case planVoided = "PLAN_VOIDED"
     case entryRecorded = "ENTRY_RECORDED"
@@ -271,6 +285,8 @@ struct BloomedState: Codable, Equatable, Sendable {
     var profile = ParticipantProfile()
     var draft: PlanDraft? = nil
     var plans: [WeeklyPlan] = []
+    // Optional for lossless decoding of installations and backups predating deferred destinations.
+    var charityDestinations: [CharityDestinationRecord]? = nil
     var stepRevisions: [DailyStepRevision] = []
     var supportPeople: [SupportPerson] = []
     var relationships: [SupportRelationship] = []

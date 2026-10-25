@@ -18,7 +18,7 @@ struct SettlementEntryView: View {
                 if let plan = store.plan(id: planID) {
                     Section {
                         Text(Format.week(plan)).foregroundStyle(BTheme.secondary)
-                        BMoneyRow(title: "Outstanding", cents: store.reconciliation(for: plan, bucket: bucket).outstandingCents)
+                        BMoneyRow(title: "No outside record for", cents: store.reconciliation(for: plan, bucket: bucket).outstandingCents)
                     }
                     Section("What happened outside Bloomed") {
                         TextField("Amount in CAD", text: $amount).keyboardType(.decimalPad)
@@ -34,11 +34,11 @@ struct SettlementEntryView: View {
                     }
                 }
             }.scrollContentBackground(.hidden).background(BTheme.background)
-                .navigationTitle("External settlement").navigationBarTitleDisplayMode(.inline)
+                .navigationTitle("Record money").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
-                .confirmationDialog("Record this outside settlement?", isPresented: $confirming, titleVisibility: .visible) {
-                    Button("Record settlement", action: save)
-                } message: { Text("Confirm that this amount was actually retained, received, or donated outside Bloomed.") }
+                .confirmationDialog("Record what happened outside Bloomed?", isPresented: $confirming, titleVisibility: .visible) {
+                    Button("Save money record", action: save)
+                } message: { Text("Confirm that this amount was actually kept, received, or donated outside Bloomed.") }
                 .onAppear(perform: prepare)
         }
     }
@@ -73,7 +73,7 @@ struct VoidSettlementView: View {
                 Section("Reason for correction") { TextField("Explain what was recorded incorrectly", text: $reason, axis: .vertical) }
                 Section {
                     if let error { BErrorText(message: error) }
-                    Button("Void mistaken record", role: .destructive, action: save).disabled(reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("Cancel mistaken record", role: .destructive, action: save).disabled(reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }.navigationTitle("Correct external record").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
@@ -117,7 +117,7 @@ struct ExceptionNoteView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section { Text("This preserves your outside agreement. Calculations and actual settlement records remain unchanged.") }
+                Section { Text("This preserves your outside agreement. Calculations and money records remain unchanged.") }
                 Section("Note") { TextField("Describe the agreement", text: $note, axis: .vertical) }
                 Section {
                     if let error { BErrorText(message: error) }

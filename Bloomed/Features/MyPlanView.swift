@@ -20,9 +20,9 @@ struct MyPlanView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                BScreenHeader(eyebrow: "YOUR AGREEMENT", title: "My plan", subtitle: "A clear commitment, one week at a time.")
+                Text("Your goals, dates, and weekly amount.").foregroundStyle(BTheme.secondary)
                 if displayedPlans.isEmpty {
-                    BEmptyState(title: "A routine that fits your life.", message: "Choose a daily walking goal and a personal commitment. Support is always optional.", symbol: "figure.walk", actionTitle: "Create your walking plan", action: { createPlan = true })
+                    BEmptyState(title: "Make your first walking plan", message: "Choose a daily step goal and an amount of your own money for seven days. Earn it back by walking; any part you don’t earn goes to charity.", symbol: "figure.walk", actionTitle: store.draft == nil ? "Create your walking plan" : "Continue your walking plan", action: { createPlan = true })
                 } else {
                     ForEach(displayedPlans) { plan in
                         NavigationLink {
@@ -32,27 +32,27 @@ struct MyPlanView: View {
                                 HStack {
                                     BStatusBadge(title: store.lifecycle(for: plan).title, warning: store.lifecycle(for: plan) == .awaitingReview)
                                     Spacer()
-                                    Image(systemName: "arrow.up.right").foregroundStyle(BTheme.secondary)
+                                    Image(systemName: "chevron.right").accessibilityHidden(true).foregroundStyle(BTheme.secondary)
                                 }
                                 Text(PlanDisplay.week(plan)).font(.title2.weight(.semibold)).foregroundStyle(BTheme.ink)
-                                PlanValueRow(title: plan.terms.stretchGoalSteps == nil ? "Daily goal" : "Base goal", value: "\(plan.terms.baseGoalSteps.formatted()) steps")
-                                if let stretch = plan.terms.stretchGoalSteps { PlanValueRow(title: "Stretch goal", value: "\(stretch.formatted()) steps") }
-                                BMoneyRow(title: "Personal commitment", cents: plan.terms.commitmentCents)
+                                PlanValueRow(title: "Everyday goal", value: "\(plan.terms.baseGoalSteps.formatted()) steps")
+                                if let stretch = plan.terms.stretchGoalSteps { PlanValueRow(title: "Higher goal", value: "\(stretch.formatted()) steps") }
+                                BMoneyRow(title: "Your weekly amount", cents: plan.terms.commitmentCents)
                                 if let support = store.support(for: plan), support.applies {
-                                    Label("\(support.alias) · match up to \(Money.format(support.capCents))", systemImage: "person.2")
+                                    Label("\(support.alias) · match up to \(Money.format(min(support.capCents, plan.terms.commitmentCents)))", systemImage: "person.2")
                                         .font(.subheadline).foregroundStyle(BTheme.secondary)
                                 }
-                                Text("View this week's agreement").font(.subheadline.weight(.semibold)).foregroundStyle(BTheme.accent)
+                                Text("View plan details").font(.subheadline.weight(.semibold)).foregroundStyle(BTheme.accent)
                             }
                         }.buttonStyle(.plain)
                     }
                     Button { createPlan = true } label: {
-                        Label(store.draft == nil ? "Prepare another week" : "Continue saved draft", systemImage: "square.and.pencil")
+                        Label(store.draft == nil ? "Prepare another week" : "Continue your walking plan", systemImage: "square.and.pencil")
                             .frame(maxWidth: .infinity, minHeight: 52)
                     }.buttonStyle(.bordered).tint(BTheme.accent)
-                    if store.draft != nil { Text("Your draft is not a financial commitment until you confirm it.").font(.subheadline).foregroundStyle(BTheme.secondary) }
+                    if store.draft != nil { Text("Your saved draft takes effect only after you confirm the week.").font(.subheadline).foregroundStyle(BTheme.secondary) }
                 }
-                PlanNotice(text: "Bloomed records your agreement and walking. Money, donations, and proof are handled outside the app.")
+                PlanNotice(text: "You record your steps and handle all money and donations outside Bloomed. The app does not collect or transfer money.")
             }.bloomedScreen()
         }
         .background(BTheme.background)
@@ -63,7 +63,7 @@ struct MyPlanView: View {
 }
 
 private enum PlanDetailSheet: String, Identifiable {
-    case editor, support, review, share
+    case editor, support, review, share, invitation
     var id: String { rawValue }
 }
 
@@ -88,15 +88,16 @@ struct PlanDetailView: View {
             }.bloomedScreen()
         }
         .background(BTheme.background)
-        .navigationTitle("Weekly agreement")
+        .navigationTitle("Weekly plan")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $sheet) { destination in
             if let plan {
                 switch destination {
                 case .editor: PlanEditorView(sourcePlan: plan)
-                case .support: SupportAgreementView(planID: plan.id)
+                case .support: SupportAgreementView(planID: plan.id, recordAgreement: store.state.effectiveSupport(for: plan.id) == nil)
                 case .review: WeeklyReviewView(planID: plan.id)
                 case .share: ShareSnapshotView(planID: plan.id)
+                case .invitation: ShareSnapshotView(planID: plan.id, initialKind: .invitation)
                 }
             }
         }
@@ -111,38 +112,44 @@ struct PlanDetailView: View {
 
     @ViewBuilder private func agreement(_ plan: WeeklyPlan) -> some View {
         let status = store.lifecycle(for: plan)
-        BScreenHeader(eyebrow: status.title, title: PlanDisplay.week(plan), subtitle: plan.timezoneID.replacingOccurrences(of: "_", with: " "))
+        Text(PlanDisplay.week(plan)).font(.title2.weight(.semibold)).foregroundStyle(BTheme.ink)
+        BStatusBadge(title: status.title, warning: status == .awaitingReview)
+        Text("\(PlanDisplay.timezoneName(plan.timezoneID)) · dates stay fixed for this plan")
+            .font(.subheadline).foregroundStyle(BTheme.secondary)
         if status == .voidedBeforeStart {
             PlanNotice(text: "This week was voided before it started. Its original agreement is preserved, and no earnings or charity allocation apply.")
         }
         BCard {
-            Label("Walking targets", systemImage: "figure.walk").font(.headline)
-            PlanValueRow(title: plan.terms.stretchGoalSteps == nil ? "Daily goal" : "Base goal", value: "\(plan.terms.baseGoalSteps.formatted()) steps")
-            if let stretch = plan.terms.stretchGoalSteps { PlanValueRow(title: "Stretch goal", value: "\(stretch.formatted()) steps") }
+            Label("Daily walking", systemImage: "figure.walk").font(.headline)
+            PlanValueRow(title: "Everyday goal", value: "\(plan.terms.baseGoalSteps.formatted()) steps")
+            if let stretch = plan.terms.stretchGoalSteps { PlanValueRow(title: "Higher goal", value: "\(stretch.formatted()) steps") }
             if plan.terms.consistencyEnabled {
                 Divider()
-                PlanValueRow(title: "Consistency return", value: Money.format(plan.consistencyReserveCents))
-                Text("Reach the base goal on any 5 of the 7 dates. They do not need to be consecutive.").font(.subheadline).foregroundStyle(BTheme.secondary)
+                PlanValueRow(title: "Consistency amount", value: Money.format(plan.consistencyReserveCents))
+                Text("Reach \(plan.terms.baseGoalSteps.formatted()) steps on any 5 of the 7 days to earn this part of your weekly amount back. The days do not need to be consecutive.").font(.subheadline).foregroundStyle(BTheme.secondary)
             }
-            Text("Full personal return requires the highest selected goal on all 7 days.").font(.subheadline).foregroundStyle(BTheme.secondary)
+            Text("To earn your full \(Format.money(plan.terms.commitmentCents)) back, reach \(plan.terms.highestGoalSteps.formatted()) steps on all 7 days.").font(.subheadline).foregroundStyle(BTheme.secondary)
         }
         BCard {
-            Text("Your personal commitment · CAD").font(.headline)
-            BMoneyRow(title: "Seven-day amount", cents: plan.terms.commitmentCents, emphasized: true)
-            PlanValueRow(title: "Outside handling", value: plan.terms.handling.title)
+            Text("Your weekly amount · CAD").font(.headline)
+            BMoneyRow(title: "Your own money", cents: plan.terms.commitmentCents, emphasized: true)
+            PlanValueRow(title: "How you handle it", value: plan.terms.handling.title)
             if !plan.terms.handlerDescription.isEmpty { Text(plan.terms.handlerDescription).font(.subheadline).foregroundStyle(BTheme.secondary) }
-            PlanValueRow(title: "Charity destination", value: plan.terms.charity)
-            Text("Only unearned personal money is allocated to charity. Unused supporter allowance stays with the supporter.").font(.subheadline).foregroundStyle(BTheme.secondary)
+            PlanValueRow(title: "Charity destination", value: store.charityDestination(for: plan).isEmpty ? "Choose later" : store.charityDestination(for: plan))
+            if store.charityDestination(for: plan).isEmpty {
+                Text("Choose a destination during weekly review if there is money to donate.").font(.subheadline).foregroundStyle(BTheme.secondary)
+            }
+            Text("The part of your own money you don’t earn back goes to this charity after you review the week. You arrange the donation yourself.").font(.subheadline).foregroundStyle(BTheme.secondary)
         }
         BCard {
-            DisclosureGroup("Exact daily return schedule") {
+            DisclosureGroup("What you can earn back each day") {
                 VStack(spacing: 16) {
                     ForEach(Array(plan.dateKeys.enumerated()), id: \.element) { index, key in
                         VStack(alignment: .leading, spacing: 5) {
                             PlanValueRow(title: PlanDisplay.shortDay(key, timezoneID: plan.timezoneID), value: Money.format(plan.dailyMaximumCents[index]))
                             if plan.terms.stretchGoalSteps != nil {
                                 let assessed = store.assessment(for: plan)
-                                Text("Base-only return: \(Money.format(assessed.dailyBaseOnlyCents[index]))")
+                                Text("\(plan.terms.baseGoalSteps.formatted()) steps: \(Money.format(assessed.dailyBaseOnlyCents[index])) back · \(plan.terms.highestGoalSteps.formatted()) steps: \(Money.format(plan.dailyMaximumCents[index])) back")
                                     .font(.subheadline).foregroundStyle(BTheme.secondary)
                             }
                         }
@@ -157,13 +164,13 @@ struct PlanDetailView: View {
                     BPrimaryButton(title: "Review this week") { sheet = .review }
                 } else if status == .reviewed {
                     Button("View reviewed results") { sheet = .review }.buttonStyle(.bordered).frame(minHeight: 44)
-                    NavigationLink("View money and external settlement") { MoneyDetailView(planID: plan.id) }.frame(minHeight: 44)
+                    NavigationLink("View money and outside records") { MoneyDetailView(planID: plan.id) }.frame(minHeight: 44)
                 }
                 Button { sheet = .share } label: { Label("Share this week", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity, minHeight: 48) }
                     .buttonStyle(.bordered).tint(BTheme.accent)
                 BPrimaryButton(title: status == .active || status == .scheduled ? "Adjust next week" : "Repeat this plan") { sheet = .editor }
             }
-            PlanNotice(text: "Changes apply to a new week. This agreement keeps its original dates, goals, and return rules.")
+            Text("Changes to goals or amounts apply to a new week. This plan keeps the terms you confirmed.").font(.subheadline).foregroundStyle(BTheme.secondary)
             if status == .scheduled {
                 Menu {
                     Button("Void scheduled week", role: .destructive) { showVoid = true }
@@ -180,14 +187,19 @@ struct PlanDetailView: View {
             Label("Optional support", systemImage: "person.2").font(.headline)
             if let support = store.state.effectiveSupport(for: plan.id) {
                 Text(support.alias).font(.title3.weight(.semibold))
-                PlanValueRow(title: support.applies ? "1:1 matching cap" : "Previously recorded cap", value: Money.format(support.capCents))
+                PlanValueRow(title: support.applies ? "Agreed weekly limit" : "Previously recorded limit", value: Money.format(support.capCents))
                 BStatusBadge(title: "Agreement recorded by you")
-                Text(support.applies ? "Matches your total personal return, including consistency. This record does not verify available funds or a payment." : "This previously recorded agreement does not apply. Its details and corrections remain in history.").font(.subheadline).foregroundStyle(BTheme.secondary)
+                Text(support.applies ? "For every $1 you earn back, \(support.alias) adds $1, up to the agreed weekly limit. Payment is arranged outside Bloomed." : "This earlier agreement does not apply to the week. Its details and corrections remain in history.").font(.subheadline).foregroundStyle(BTheme.secondary)
+                if support.applies && support.capCents > plan.terms.commitmentCents {
+                    Text("With your \(Money.format(plan.terms.commitmentCents)) commitment, the most this plan can earn in extra support is \(Money.format(min(plan.terms.commitmentCents, support.capCents))). A higher limit does not increase the 1:1 rate.")
+                        .font(.subheadline).foregroundStyle(BTheme.secondary)
+                }
                 Button("View recorded agreement") { sheet = .support }.frame(minHeight: 44)
             } else {
-                Text("Someone you trust can match what you earn back, up to an agreed cap.").foregroundStyle(BTheme.secondary)
+                Text("Someone you trust can add $1 for each $1 you earn back, up to a weekly amount you agree together.").foregroundStyle(BTheme.secondary)
                 if [.active, .scheduled].contains(store.lifecycle(for: plan)) {
-                    Button("Invite or record a supporter") { sheet = .support }.frame(minHeight: 44)
+                    Button("Prepare an invitation") { sheet = .invitation }.frame(minHeight: 44)
+                    Button("Record an agreement already made") { sheet = .support }.frame(minHeight: 44)
                 } else {
                     Text("No matching agreement applied to this week.").font(.subheadline).foregroundStyle(BTheme.secondary)
                 }

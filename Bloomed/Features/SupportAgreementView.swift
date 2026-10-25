@@ -19,11 +19,17 @@ struct SupportAgreementView: View {
     @State private var error: String?
     @State private var saving = false
     @State private var loaded = false
-    @State private var showShare = false
+    @State private var shareKind: SnapshotKind?
+    @State private var recordingAgreement = false
     @State private var showNextPlan = false
     @State private var standingAction: SupportStandingAction?
     @State private var showRemove = false
     @State private var removeReason = ""
+
+    init(planID: UUID, recordAgreement: Bool = false) {
+        self.planID = planID
+        _recordingAgreement = State(initialValue: recordAgreement)
+    }
 
     private var originalPlan: WeeklyPlan? { store.plans.first { $0.id == planID } }
     private var originalSupport: WeeklySupportSnapshot? {
@@ -48,9 +54,10 @@ struct SupportAgreementView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    BScreenHeader(eyebrow: "OPTIONAL SUPPORT", title: "Someone in your corner.", subtitle: "Record a matching agreement you made outside Bloomed.")
+                    BScreenHeader(eyebrow: "OPTIONAL SUPPORT", title: "Someone in your corner.", subtitle: originalSupport == nil && !recordingAgreement ? "Invite someone to match what you earn back, or record a match you have already agreed." : "Your supporter adds $1 for each $1 you earn back, up to the weekly limit you agree.")
                     if let plan = originalPlan {
                         if let support = originalSupport, !editing { savedAgreement(support, plan: plan) }
+                        else if originalSupport == nil && !recordingAgreement { supportChoices(plan) }
                         else { agreementForm(plan) }
                     } else { BEmptyState(title: "Plan unavailable", message: "Choose a confirmed walking plan before recording support.") }
                     if let error { PlanNotice(text: error, warning: true) }
@@ -63,8 +70,8 @@ struct SupportAgreementView: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
             .task { load() }
             .planKeyboardDismiss()
-            .sheet(isPresented: $showShare) {
-                ShareSnapshotView(planID: targetPlan?.id ?? planID)
+            .sheet(item: $shareKind) { kind in
+                ShareSnapshotView(planID: planID, initialKind: kind)
             }
             .sheet(isPresented: $showNextPlan) {
                 PlanEditorView(sourcePlan: originalPlan)
@@ -82,6 +89,39 @@ struct SupportAgreementView: View {
         }
     }
 
+
+    @ViewBuilder private func supportChoices(_ plan: WeeklyPlan) -> some View {
+        if [.scheduled, .active].contains(store.lifecycle(for: plan)) {
+            BCard {
+                Label("How supporter matching works", systemImage: "person.2").font(.headline)
+                Text("Someone you know can add $1 for every $1 you earn back from your own commitment, up to a weekly limit you agree. This includes any consistency amount.")
+                    .foregroundStyle(BTheme.secondary)
+                Text("With this plan, a supporter could add up to \(Money.format(plan.terms.commitmentCents)). Any unused part of their limit stays with them.")
+                    .font(.subheadline).foregroundStyle(BTheme.secondary)
+            }
+            BCard {
+                Text("Ask someone to support you").font(.headline)
+                Text("Prepare a personal invitation with your walking goals and how the match works. You choose whether and where to share it.")
+                    .foregroundStyle(BTheme.secondary)
+                BPrimaryButton(title: "Prepare invitation") { shareKind = .invitation }
+                    .accessibilityIdentifier("support.invite")
+                Text("An invitation does not create an agreement.").font(.subheadline).foregroundStyle(BTheme.secondary)
+            }
+            BCard {
+                Text("Already agreed on a match?").font(.headline)
+                Text("Record the name, weekly limit, and dates you discussed outside Bloomed.")
+                    .foregroundStyle(BTheme.secondary)
+                Button { recordingAgreement = true } label: {
+                    Text("Record agreed match").frame(maxWidth: .infinity, minHeight: 52)
+                }.buttonStyle(.bordered).tint(BTheme.accent)
+                    .accessibilityIdentifier("support.record-agreement")
+            }
+        } else {
+            PlanNotice(text: "A new match needs an upcoming or active walking plan. Past weeks keep their recorded agreements.")
+            BPrimaryButton(title: "Prepare another week") { showNextPlan = true }
+        }
+    }
+
     private func savedAgreement(_ support: WeeklySupportSnapshot, plan: WeeklyPlan) -> some View {
         VStack(alignment: .leading, spacing: 24) {
             BCard {
@@ -90,14 +130,15 @@ struct SupportAgreementView: View {
                     PlanNotice(text: "This previously recorded agreement does not apply. Its original details remain in history, and no matching is calculated from it.", warning: true)
                 }
                 Text(support.alias).font(.title.weight(.semibold))
-                PlanValueRow(title: support.applies ? "1:1 weekly matching cap · CAD" : "Previously recorded cap · CAD", value: Money.format(support.capCents))
+                PlanValueRow(title: support.applies ? "Weekly match limit · CAD" : "Previously recorded limit · CAD", value: Money.format(support.capCents))
                 Text(PlanDisplay.week(plan)).font(.subheadline).foregroundStyle(BTheme.secondary)
-                Text("Matches your total personal return, including any consistency return. Unused allowance stays with the supporter.").foregroundStyle(BTheme.secondary)
+                Text(SnapshotService.matchLimitExplanation(commitmentCents: plan.terms.commitmentCents, capCents: support.capCents)).foregroundStyle(BTheme.secondary)
+                Text("Any unused part of the limit stays with the supporter.").font(.subheadline).foregroundStyle(BTheme.secondary)
                 PlanValueRow(title: "Outside agreement date", value: PlanDisplay.shortDay(support.externallyAgreedDateKey, timezoneID: plan.timezoneID))
                 if let standingID = support.standingAgreementID, let agreement = store.state.standingAgreements.first(where: { $0.id == standingID }) {
                     Divider()
                     Label("Recurring support recorded", systemImage: "repeat").font(.headline)
-                    Text("Applies to confirmed weeks with unchanged recorded terms, from \(PlanDisplay.shortDay(agreement.effectiveStartDateKey, timezoneID: agreement.timezoneID))\(agreement.inclusiveEndDateKey.map { " through " + PlanDisplay.shortDay($0, timezoneID: agreement.timezoneID) } ?? " until stopped").")
+                    Text("Covers whole confirmed weeks with unchanged goals, amount, rules, and time zone, from \(PlanDisplay.shortDay(agreement.effectiveStartDateKey, timezoneID: agreement.timezoneID))\(agreement.inclusiveEndDateKey.map { " through " + PlanDisplay.shortDay($0, timezoneID: agreement.timezoneID) } ?? " until stopped"). The weekly limit resets for each covered week. You still confirm every walking plan yourself.")
                         .font(.subheadline).foregroundStyle(BTheme.secondary)
                     if agreement.pausedAt != nil || agreement.endedAt != nil {
                         BStatusBadge(title: agreement.endedAt != nil ? "Ended for future weeks" : "Paused for future weeks", warning: true)
@@ -111,7 +152,7 @@ struct SupportAgreementView: View {
                 }
             }
             PlanNotice(text: "This is your record of an outside agreement. The supporter has not signed in or independently confirmed it in Bloomed. No funds have been collected.")
-            Button { showShare = true } label: { Label("Share this week's summary", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity, minHeight: 52) }
+            Button { shareKind = .progress } label: { Label("Share this week's progress", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity, minHeight: 52) }
                 .buttonStyle(.bordered).tint(BTheme.accent)
             Button("Correct recorded agreement") { editing = true }.frame(maxWidth: .infinity, minHeight: 44)
             if support.applies {
@@ -122,13 +163,9 @@ struct SupportAgreementView: View {
 
     @ViewBuilder private func agreementForm(_ plan: WeeklyPlan) -> some View {
         if originalSupport == nil {
-            BCard {
-                Text("A simple 1:1 match").font(.headline)
-                Text("If you earn back $10 of your own commitment, your supporter provides another $10—up to the weekly cap you agree. Consistency counts toward the same match.")
-                    .foregroundStyle(BTheme.secondary)
-                Button { showShare = true } label: { Label("Prepare an invitation", systemImage: "square.and.arrow.up").frame(minHeight: 44) }
-                Text("Sharing does not activate support. Record the agreement only after you have discussed it.").font(.subheadline).foregroundStyle(BTheme.secondary)
-            }
+            Button("Back to support options") { recordingAgreement = false }.frame(minHeight: 44)
+            Text("Record this only after you and your supporter have agreed the amount and dates outside Bloomed.")
+                .font(.subheadline).foregroundStyle(BTheme.secondary)
         }
         if originalSupport == nil, store.lifecycle(for: plan) == .active {
             BCard {
@@ -156,43 +193,48 @@ struct SupportAgreementView: View {
     private func formFields(_ plan: WeeklyPlan) -> some View {
         VStack(alignment: .leading, spacing: 24) {
             BCard {
-                Text("Your recorded agreement").font(.headline)
+                Text("The match you agreed").font(.headline)
                 Text(PlanDisplay.week(plan)).font(.subheadline).foregroundStyle(BTheme.secondary)
                 TextField("Supporter's name or alias", text: $alias)
                     .textContentType(.nickname).padding(14).background(BTheme.background, in: RoundedRectangle(cornerRadius: 12))
                     .accessibilityIdentifier("support.alias")
-                PlanInput(title: "Maximum match for one week", prompt: "0.00", text: $capText, keyboard: .decimalPad, suffix: "CAD", identifier: "support.cap")
-                Text("CAD $0.01–$1,000.00. This is a cap, not a payment already received.").font(.subheadline).foregroundStyle(BTheme.secondary)
+                PlanInput(title: "Weekly match limit", prompt: "0.00", text: $capText, keyboard: .decimalPad, suffix: "CAD", identifier: "support.cap")
+                Text("Choose a limit from CAD $0.01 to $1,000. This records an agreement, not a payment.").font(.subheadline).foregroundStyle(BTheme.secondary)
+                if let capCents {
+                    Text(SnapshotService.matchLimitExplanation(commitmentCents: plan.terms.commitmentCents, capCents: capCents))
+                        .font(.subheadline).foregroundStyle(BTheme.secondary)
+                        .accessibilityIdentifier("support.match-explanation")
+                }
                 DatePicker("Agreed outside Bloomed", selection: $agreementDate, in: ...store.now, displayedComponents: .date)
                     .environment(\.timeZone, TimeZone(identifier: plan.timezoneID) ?? .current)
                 TextField("Optional note", text: $note, axis: .vertical).lineLimit(2...4)
             }
             BCard {
-                Toggle("Ongoing weekly agreement", isOn: $standing).font(.headline).tint(BTheme.accent)
+                Toggle("Repeat for future weeks", isOn: $standing).font(.headline).tint(BTheme.accent)
                 if standing {
-                    Text("The cap resets for each new week you explicitly confirm. Goals, budget, timezone, and rules must still match this recorded agreement.")
+                    Text("The limit starts fresh for each whole week you confirm with the same goals, commitment, rules, and time zone. If those terms change, agree the change outside Bloomed before recording another match.")
                         .font(.subheadline).foregroundStyle(BTheme.secondary)
                     Toggle("Set an end date", isOn: $hasEndDate).tint(BTheme.accent)
                     if hasEndDate {
                         DatePicker("Last covered date", selection: $endDate, in: standingEarliestEnd(plan)..., displayedComponents: .date)
                             .environment(\.timeZone, TimeZone(identifier: plan.timezoneID) ?? .current)
                     }
-                    Text("No automatic charge, plan creation, or supporter notification occurs.").font(.subheadline).foregroundStyle(BTheme.secondary)
+                    Text("You still confirm each new walking plan. Bloomed does not charge or notify your supporter.").font(.subheadline).foregroundStyle(BTheme.secondary)
                 } else { Text("Covers only the seven dates shown above.").font(.subheadline).foregroundStyle(BTheme.secondary) }
             }
             if let capCents {
                 BCard {
-                    Text("Match preview · CAD").font(.headline)
-                    BMoneyRow(title: "Current recorded personal return", cents: store.assessment(for: plan).personalReturnCents)
+                    Text("This week's match · CAD").font(.headline)
+                    BMoneyRow(title: "Your money earned back so far", cents: store.assessment(for: plan).personalReturnCents)
                     if let preview = try? RewardEngine.evaluate(terms: plan.terms, dailySteps: store.effectiveSteps(for: plan), supporterCapCents: capCents) {
-                        BMoneyRow(title: "Matching reward from recorded activity", cents: preview.supporterRewardCents)
-                        BMoneyRow(title: "Unused supporter allowance", cents: preview.unusedSupporterAllowanceCents)
+                        BMoneyRow(title: "Extra supporter match calculated", cents: preview.supporterRewardCents)
+                        BMoneyRow(title: "Unused part of the weekly limit", cents: preview.unusedSupporterAllowanceCents)
                         if originalSupport != nil {
                             Divider()
                             PlanAssessmentComparison(before: store.assessment(for: plan), after: preview)
                         }
                     }
-                    Text("Amounts remain provisional until weekly review. The supporter keeps unused allowance.").font(.subheadline).foregroundStyle(BTheme.secondary)
+                    Text("These amounts can change until you review the week. Any unused part of the limit stays with the supporter; it is not donated.").font(.subheadline).foregroundStyle(BTheme.secondary)
                 }
             }
             if originalSupport != nil {
@@ -200,12 +242,12 @@ struct SupportAgreementView: View {
                     Text("Preserve a correction").font(.headline)
                     TextField("Why is the recorded agreement changing?", text: $correctionReason, axis: .vertical)
                         .lineLimit(2...4).padding(12).background(BTheme.background, in: RoundedRectangle(cornerRadius: 12))
-                    Text("The previous agreement stays in history. A reviewed week will need another review; existing settlement records are retained.").font(.subheadline).foregroundStyle(BTheme.secondary)
+                    Text("The previous agreement stays in history. A reviewed week will need another review. Existing payment and donation records are kept.").font(.subheadline).foregroundStyle(BTheme.secondary)
                 }
             }
             Toggle("We agreed to this outside Bloomed", isOn: $acknowledged).tint(BTheme.accent)
                 .accessibilityIdentifier("support.acknowledged")
-            BPrimaryButton(title: originalSupport == nil ? "Save recorded agreement" : "Save agreement correction") { save(plan) }
+            BPrimaryButton(title: originalSupport == nil ? "Record agreed match" : "Save agreement correction") { save(plan) }
                 .disabled(!canSave(plan) || saving).accessibilityIdentifier("support.save")
             PlanNotice(text: "This creates a participant-recorded agreement. It does not contact the supporter, collect money, or verify their acceptance.")
         }

@@ -11,6 +11,7 @@ enum StateValidator {
         try unique([state.profile.id])
         try unique(state.draft.map { [$0.id] } ?? [])
         try unique(state.plans.map(\.id))
+        try unique((state.charityDestinations ?? []).map(\.id))
         try unique(state.stepRevisions.map(\.id))
         try unique(state.supportPeople.map(\.id))
         try unique(state.relationships.map(\.id))
@@ -42,7 +43,12 @@ enum StateValidator {
         func validCap(_ cents: Int) throws {
             guard (1...100_000).contains(cents) else { throw DomainError.invalid("The backup contains an invalid matching cap.") }
         }
-        if let draft = state.draft { _ = try WeeklyCalendar.date(for: draft.startDateKey, timezoneID: draft.timezoneID) }
+        if let draft = state.draft {
+            _ = try WeeklyCalendar.date(for: draft.startDateKey, timezoneID: draft.timezoneID)
+            guard (0...4).contains(draft.step), draft.setupFlowVersion == nil || draft.setupFlowVersion == 2 else {
+                throw DomainError.invalid("The saved draft uses an unsupported setup step.")
+            }
+        }
 
         for value in state.plans {
             try owned(value.participantID)
@@ -58,6 +64,23 @@ enum StateValidator {
         for index in confirmed.indices {
             for other in confirmed.indices where other > index {
                 if try WeeklyCalendar.intervalsOverlap(confirmed[index], confirmed[other]) { throw DomainError.invalid("The backup contains overlapping confirmed plans.") }
+            }
+        }
+
+        var destinationPlans = Set<UUID>()
+        var destinationTransactions = Set<UUID>()
+        for destination in state.charityDestinations ?? [] {
+            try owned(destination.participantID)
+            try owned(destination.actorID)
+            let week = try plan(destination.planID)
+            guard let confirmedAt = week.confirmedAt,
+                  week.voidedAt == nil || destination.recordedAt <= week.voidedAt!,
+                  week.terms.charity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !destination.destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  destination.recordedAt >= confirmedAt,
+                  destinationPlans.insert(week.id).inserted,
+                  destinationTransactions.insert(destination.transactionKey).inserted else {
+                throw DomainError.invalid("A charity choice is missing, duplicated, or changes an existing destination.")
             }
         }
 
@@ -149,6 +172,12 @@ enum StateValidator {
             let expected = try RewardEngine.evaluate(terms: week.terms, dailySteps: week.dateKeys.map { totals[$0] ?? nil }, supporterCapCents: cap)
             guard expected == assessment.result else { throw DomainError.invalid("An assessment does not match its preserved source records.") }
             if let reviewed = assessment.reviewedAt {
+                if assessment.result.charityAllocationCents > 0,
+                   week.terms.charity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    guard (state.charityDestinations ?? []).contains(where: {
+                        $0.planID == week.id && $0.recordedAt <= reviewed
+                    }) else { throw DomainError.invalid("Choose a charity or cause before reviewing an amount for charity.") }
+                }
                 let end = try WeeklyCalendar.interval(for: week).end
                 let missing = Set(week.dateKeys.filter { totals[$0] == nil || totals[$0]! == nil })
                 guard week.confirmedAt != nil, week.voidedAt == nil, reviewed >= end, assessment.reviewerID == owner,

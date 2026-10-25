@@ -2,14 +2,14 @@ import XCTest
 @testable import Bloomed
 
 final class DomainStateTests: XCTestCase {
-    private func reviewedState() throws -> BloomedState {
+    private func reviewedState(steps: Int = 8000, charity: String = "Chosen charity") throws -> BloomedState {
         var state = BloomedState()
         let owner = state.profile.id
         let zone = "America/Toronto"
         let confirmation = try WeeklyCalendar.date(for: "2026-10-24", timezoneID: zone)
         let review = try WeeklyCalendar.date(for: "2026-11-02", timezoneID: zone)
         let terms = PlanTerms(baseGoalSteps: 5000, stretchGoalSteps: 8000, consistencyEnabled: true,
-                              commitmentCents: 3500, charity: "Chosen charity")
+                              commitmentCents: 3500, charity: charity)
         let initial = try RewardEngine.evaluate(terms: terms, dailySteps: Array(repeating: nil, count: 7))
         let week = WeeklyPlan(participantID: owner, startDateKey: "2026-10-26", timezoneID: zone,
                               dateKeys: try WeeklyCalendar.dateKeys(startDateKey: "2026-10-26", timezoneID: zone),
@@ -18,9 +18,9 @@ final class DomainStateTests: XCTestCase {
         state.plans = [week]
         for key in week.dateKeys {
             state.stepRevisions.append(DailyStepRevision(participantID: owner, planID: week.id, dateKey: key,
-                                                        steps: 8000, actorID: owner, recordedAt: review, transactionKey: UUID()))
+                                                        steps: steps, actorID: owner, recordedAt: review, transactionKey: UUID()))
         }
-        let result = try RewardEngine.evaluate(terms: terms, dailySteps: Array(repeating: 8000, count: 7))
+        let result = try RewardEngine.evaluate(terms: terms, dailySteps: Array(repeating: steps, count: 7))
         let assessment = AssessmentRevision(participantID: owner, planID: week.id, inputFingerprint: "preserved-inputs",
                                             stepRevisionIDs: state.stepRevisions.map(\.id), result: result,
                                             createdAt: review, reviewedAt: review, reviewerID: owner, transactionKey: UUID())
@@ -132,4 +132,61 @@ final class DomainStateTests: XCTestCase {
         XCTAssertEqual(decoded.stepRevisions.first { $0.id == zero.id }?.steps, 0)
         XCTAssertTrue(decoded.stepRevisions.contains { $0.id == clear.id && $0.steps == nil })
     }
+
+    func testDeferredDestinationDoesNotChangeWalkingOrMoneyCalculations() throws {
+        let named = PlanTerms(baseGoalSteps: 5000, stretchGoalSteps: 8000, consistencyEnabled: true, commitmentCents: 3500, charity: "Chosen cause")
+        var deferred = named
+        deferred.charity = ""
+        let totals: [Int?] = [8000, 5000, 8000, 5000, 8000, 0, nil]
+        XCTAssertEqual(try RewardEngine.evaluate(terms: named, dailySteps: totals),
+                       try RewardEngine.evaluate(terms: deferred, dailySteps: totals))
+    }
+
+    func testReviewWithCharityAmountRequiresDestinationChosenBeforeReview() throws {
+        var state = try reviewedState(steps: 0, charity: "")
+        XCTAssertThrowsError(try StateValidator.validate(state))
+        let plan = state.plans[0]
+        let reviewDate = state.assessments[0].reviewedAt!
+        let destination = CharityDestinationRecord(participantID: state.profile.id, planID: plan.id,
+            destination: "Selected later", recordedAt: reviewDate, actorID: state.profile.id, transactionKey: UUID())
+        state.charityDestinations = [destination]
+        try StateValidator.validate(state)
+        XCTAssertEqual(state.plans[0].terms.charity, "", "Original plan terms stay unchanged")
+        state.charityDestinations![0].recordedAt = reviewDate.addingTimeInterval(1)
+        XCTAssertThrowsError(try StateValidator.validate(state), "A later choice cannot make an earlier incomplete review valid")
+    }
+
+    func testDestinationRecordRejectsDuplicateReplacementAndUnknownOwner() throws {
+        var state = try reviewedState(charity: "")
+        let plan = state.plans[0]
+        let destination = CharityDestinationRecord(participantID: state.profile.id, planID: plan.id,
+            destination: "Selected cause", recordedAt: plan.confirmedAt!, actorID: state.profile.id, transactionKey: UUID())
+        state.charityDestinations = [destination]
+        try StateValidator.validate(state)
+        var duplicate = destination
+        duplicate.id = UUID()
+        duplicate.transactionKey = UUID()
+        state.charityDestinations!.append(duplicate)
+        XCTAssertThrowsError(try StateValidator.validate(state))
+        state.charityDestinations = [destination]
+        state.charityDestinations![0].actorID = UUID()
+        XCTAssertThrowsError(try StateValidator.validate(state))
+        state.charityDestinations = [destination]
+        state.plans[0].terms.charity = "Originally selected cause"
+        XCTAssertThrowsError(try StateValidator.validate(state), "A deferred choice must not overwrite an original destination")
+    }
+
+    func testOlderBackupWithoutAdditiveDestinationFieldsStillDecodes() throws {
+        let state = try reviewedState()
+        let envelope = BackupEnvelope(exportedAt: state.assessments[0].createdAt, state: state)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(envelope)) as? [String: Any])
+        var oldState = try XCTUnwrap(json["state"] as? [String: Any])
+        oldState.removeValue(forKey: "charityDestinations")
+        json["state"] = oldState
+        let decoded = try JSONDecoder().decode(BackupEnvelope.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(decoded.state.charityDestinations)
+        XCTAssertEqual(decoded.state.plans, state.plans)
+        try StateValidator.validate(decoded.state)
+    }
+
 }

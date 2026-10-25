@@ -5,15 +5,7 @@ struct PlanNotice: View {
     var warning = false
 
     var body: some View {
-        Label {
-            Text(text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-        } icon: {
-            Image(systemName: warning ? "exclamationmark.circle" : "info.circle")
-        }
-        .foregroundStyle(warning ? BTheme.warning : BTheme.secondary)
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(warning ? BTheme.warningSoft : BTheme.accentSoft, in: RoundedRectangle(cornerRadius: 16))
+        BNotice(message: text, warning: warning)
     }
 }
 
@@ -46,6 +38,7 @@ struct PlanInput: View {
         TextField(prompt, text: $text)
             .keyboardType(keyboard)
             .font(.title2.monospacedDigit())
+            .accessibilityLabel(title)
             .accessibilityIdentifier(identifier)
     }
 
@@ -74,6 +67,10 @@ struct PlanValueRow: View {
 }
 
 enum PlanDisplay {
+    static func timezoneName(_ identifier: String) -> String {
+        identifier.split(separator: "/").last.map(String.init)?.replacingOccurrences(of: "_", with: " ") ?? identifier
+    }
+
     static func shortDay(_ key: String, timezoneID: String) -> String {
         guard let date = try? WeeklyCalendar.date(for: key, timezoneID: timezoneID) else { return key }
         let formatter = DateFormatter()
@@ -113,9 +110,9 @@ struct PlanAssessmentComparison: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("How this changes the week").font(.headline)
             comparison("Your money earned back", before.personalReturnCents, after.personalReturnCents)
-            comparison("Charity allocation", before.charityAllocationCents, after.charityAllocationCents)
-            comparison("Supporter rewards", before.supporterRewardCents, after.supporterRewardCents)
-            Text("Existing external payment and donation records stay in your history. Confirm a new weekly review before recording further settlement.")
+            comparison("Amount for charity", before.charityAllocationCents, after.charityAllocationCents)
+            comparison("Supporter match", before.supporterRewardCents, after.supporterRewardCents)
+            Text("Existing external payment and donation records stay in your history. Review the corrected week before recording more money received, kept, or donated.")
                 .font(.subheadline).foregroundStyle(BTheme.secondary)
         }
     }

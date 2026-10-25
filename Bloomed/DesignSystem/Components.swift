@@ -40,7 +40,8 @@ struct BEmptyState: View {
         BCard {
             if let illustration {
                 BBrandArtwork(kind: illustration)
-                    .frame(width: 120, height: 72, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(height: 108)
                     .accessibilityHidden(true)
             } else {
                 Image(systemName: symbol).font(.system(size: 32, weight: .light))
@@ -113,7 +114,7 @@ struct BScreenHeader: View {
                 Text(eyebrow.uppercased()).font(.caption.weight(.semibold)).tracking(1.5).foregroundStyle(BTheme.secondary)
             }
             Text(title).font(.largeTitle.weight(.bold)).tracking(-0.7).foregroundStyle(BTheme.ink)
-            Text(subtitle).font(.body).foregroundStyle(BTheme.secondary)
+            if !subtitle.isEmpty { Text(subtitle).font(.body).foregroundStyle(BTheme.secondary) }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -149,14 +150,14 @@ struct BStepProgress: View {
                 }
             }.frame(height: 10).accessibilityHidden(true)
             ViewThatFits(in: .horizontal) {
-                HStack { target("Base", value: base); Spacer(); if let stretch { target("Stretch", value: stretch) } }
-                VStack(alignment: .leading, spacing: 6) { target("Base", value: base); if let stretch { target("Stretch", value: stretch) } }
+                HStack { target("Everyday", value: base); Spacer(); if let stretch { target("Higher", value: stretch) } }
+                VStack(alignment: .leading, spacing: 6) { target("Everyday", value: base); if let stretch { target("Higher", value: stretch) } }
             }
             if steps < (stretch ?? base) {
-                Text("\(max(0, (steps < base ? base : (stretch ?? base)) - steps).formatted()) steps to \(steps < base ? (stretch == nil ? "your daily goal" : "your base goal") : "your stretch goal")")
+                Text("\(max(0, (steps < base ? base : (stretch ?? base)) - steps).formatted()) steps to \(steps < base ? (stretch == nil ? "your daily goal" : "your everyday goal") : "your higher goal")")
                     .font(.caption).foregroundStyle(BTheme.secondary)
             } else {
-                Text("Daily goal reached. Extra steps stay in your activity record; your daily return is capped.")
+                Text("Goal reached. Extra steps stay in your record; today’s amount stays the same.")
                     .font(.caption).foregroundStyle(BTheme.secondary)
             }
         }

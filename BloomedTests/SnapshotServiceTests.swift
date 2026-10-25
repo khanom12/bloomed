@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Bloomed
 
 @MainActor
@@ -21,7 +22,7 @@ final class SnapshotServiceTests: XCTestCase {
     private let charity = "CHARITY_DESTINATION_6B"
     private let alias = "SUPPORT_ALIAS_7G"
 
-    private func fixture(support: Bool = true, reviewed: Bool = true) throws -> (AppStore, WeeklyPlan, Clock) {
+    private func fixture(support: Bool = true, reviewed: Bool = true, supportCapCents: Int = 700, standing: Bool = false, charityDestination: String? = nil, supporterAlias: String? = nil) throws -> (AppStore, WeeklyPlan, Clock) {
         let clock = Clock()
         let store = AppStore(repository: Repository(), clock: { clock.now })
         var draft = try store.beginDraft()
@@ -30,7 +31,7 @@ final class SnapshotServiceTests: XCTestCase {
         draft.stretchGoalText = "8000"
         draft.consistencyEnabled = true
         draft.commitmentText = "35.00"
-        draft.charity = charity
+        draft.charity = charityDestination ?? charity
         draft.handling = .anotherPersonHolds
         draft.handlerDescription = handler
         draft.privateMotivation = privateReason
@@ -40,8 +41,8 @@ final class SnapshotServiceTests: XCTestCase {
         let plan = try store.confirmDraft()
         try store.updateProfile(displayName: "Chosen public name", progressionPromptsEnabled: true)
         if support {
-            try store.recordSupport(planID: plan.id, alias: alias, capCents: 700,
-                agreementDate: clock.now, wholeWeekAcknowledged: true, note: supportNote)
+            try store.recordSupport(planID: plan.id, alias: supporterAlias ?? alias, capCents: supportCapCents,
+                agreementDate: clock.now, standing: standing, wholeWeekAcknowledged: true, note: supportNote)
         }
         try store.recordSteps(planID: plan.id, dateKey: plan.dateKeys[0], total: 5000)
         if reviewed {
@@ -61,12 +62,12 @@ final class SnapshotServiceTests: XCTestCase {
         XCTAssertFalse(content.text.contains(charity))
         XCTAssertFalse(content.text.contains(alias))
         XCTAssertFalse(content.text.contains(Format.money(plan.terms.commitmentCents)))
-        for financialLabel in ["Personal commitment:", "Personal return calculated:", "Charity allocation:",
-                               "Supporter reward calculated:", "Unused supporter allowance:", "1:1 match up to"] {
+        for financialLabel in ["My own weekly commitment:", "My money earned back", "Planned donation:",
+                               "Extra supporter match calculated:", "Unused part of the match limit:", "weekly match limit"] {
             XCTAssertFalse(content.text.contains(financialLabel), "Unexpected disclosure: \(financialLabel)")
         }
         XCTAssertEqual(content.activityLines.count, 7)
-        XCTAssertTrue(content.targetLines.contains { $0.contains("Daily base:") })
+        XCTAssertTrue(content.targetLines.contains { $0.contains("Everyday goal:") })
         XCTAssertTrue(content.text.contains("Not independently verified"))
         XCTAssertEqual(content.timezoneID, plan.timezoneID)
     }
@@ -96,11 +97,11 @@ final class SnapshotServiceTests: XCTestCase {
         let assessment = store.latestReviewedAssessment(for: plan)!.result
         let content = SnapshotService.content(plan: plan, store: store, kind: .reviewed, includeMoney: false, at: clock.now)
         XCTAssertEqual(content.status, "Reviewed calculation · payment is separate")
-        XCTAssertTrue(content.moneyLines.contains("Personal commitment: \(Format.money(plan.terms.commitmentCents)) CAD"))
-        XCTAssertTrue(content.moneyLines.contains("Personal return calculated: \(Format.money(assessment.personalReturnCents))"))
-        XCTAssertTrue(content.moneyLines.contains("Charity allocation: \(Format.money(assessment.charityAllocationCents)) to \(charity)"))
-        XCTAssertTrue(content.moneyLines.contains("Supporter reward calculated: \(Format.money(assessment.supporterRewardCents))"))
-        XCTAssertTrue(content.moneyLines.contains("Unused supporter allowance: \(Format.money(assessment.unusedSupporterAllowanceCents)) stays with supporter"))
+        XCTAssertTrue(content.moneyLines.contains("My own weekly commitment: \(Format.money(plan.terms.commitmentCents)) CAD"))
+        XCTAssertTrue(content.moneyLines.contains("My money earned back (reviewed): \(Format.money(assessment.personalReturnCents))"))
+        XCTAssertTrue(content.moneyLines.contains("Planned donation: \(Format.money(assessment.charityAllocationCents)) to \(charity)"))
+        XCTAssertTrue(content.moneyLines.contains("Extra supporter match calculated: \(Format.money(assessment.supporterRewardCents))"))
+        XCTAssertTrue(content.moneyLines.contains("Unused part of the match limit: \(Format.money(assessment.unusedSupporterAllowanceCents)) stays with the supporter."))
         XCTAssertTrue(content.text.contains("An earned amount is not proof of payment or donation."))
         // The external record remains a separate fact; the summary doesn't claim it verified.
         XCTAssertFalse(content.text.contains("verified payment"))
@@ -111,7 +112,9 @@ final class SnapshotServiceTests: XCTestCase {
         let original = store.state
         let content = SnapshotService.content(plan: plan, store: store, kind: .invitation, includeMoney: false, at: clock.now)
         XCTAssertTrue(content.moneyLines.contains("Invitation — no supporter agreement recorded"))
-        XCTAssertTrue(content.moneyLines.contains("Would you match what I earn back, up to an amount you choose?"))
+        XCTAssertTrue(content.moneyLines.contains { $0.contains("Would you match $1 for every $1 I earn back") })
+        XCTAssertTrue(content.text.contains("There is nothing to accept or pay in Bloomed."))
+        XCTAssertTrue(content.text.contains("the most you could add is \(Format.money(plan.terms.commitmentCents))"))
         XCTAssertFalse(content.moneyLines.isEmpty, "An invitation must preview its proposed financial context")
         XCTAssertTrue(content.activityLines.isEmpty, "An invitation does not need private dated activity")
         XCTAssertNil(store.support(for: plan))
@@ -141,8 +144,117 @@ final class SnapshotServiceTests: XCTestCase {
                               reason: "Corrected activity total")
         let content = SnapshotService.content(plan: plan, store: store, kind: .progress, includeMoney: true, at: clock.now)
         XCTAssertEqual(content.status, "Correction awaiting review · provisional")
-        XCTAssertFalse(content.moneyLines.contains { $0.hasPrefix("Charity allocation:") })
-        XCTAssertTrue(content.moneyLines.contains("Personal return calculated: \(Format.money(400))"))
+        XCTAssertFalse(content.moneyLines.contains { $0.hasPrefix("Planned donation:") })
+        XCTAssertTrue(content.moneyLines.contains("My money earned back so far: \(Format.money(400))"))
         XCTAssertEqual(store.latestReviewedAssessment(for: plan)?.result.personalReturnCents, 100)
+    }
+
+    func testLargeMatchLimitExplainsOneToOneMaximumWithoutChangingCalculatedMatch() throws {
+        let (store, plan, clock) = try fixture(reviewed: false, supportCapCents: 35_000)
+        let before = store.state
+        let content = SnapshotService.content(plan: plan, store: store, kind: .invitation, includeMoney: false, at: clock.now)
+        XCTAssertTrue(content.text.contains("$1 for every $1 of my own money earned back"))
+        XCTAssertTrue(content.text.contains("up to \(Format.money(35_000)) per week"))
+        XCTAssertTrue(content.text.contains("largest possible match for this plan is \(Format.money(3500))"))
+        XCTAssertTrue(content.text.contains("does not multiply the match"))
+        XCTAssertTrue(content.text.contains("not independently confirmed by the supporter"))
+        XCTAssertEqual(store.assessment(for: plan).supporterRewardCents, 100)
+        XCTAssertEqual(store.state, before)
+    }
+
+    func testSmallerMatchLimitIsTheMaximumShownInTheInvitation() throws {
+        let (store, plan, clock) = try fixture(reviewed: false, supportCapCents: 700)
+        let content = SnapshotService.content(plan: plan, store: store, kind: .invitation, includeMoney: false, at: clock.now)
+        XCTAssertTrue(content.text.contains("largest possible match for this plan is \(Format.money(700))"))
+        XCTAssertFalse(content.text.contains("does not multiply the match"))
+    }
+
+    func testRecurringSupportExplainsWeeklyResetAndRequiresWholeWeeks() throws {
+        let (store, plan, clock) = try fixture(reviewed: false, standing: true)
+        let before = store.state
+        let content = SnapshotService.content(plan: plan, store: store, kind: .invitation, includeMoney: false, at: clock.now)
+        XCTAssertTrue(content.text.contains("Recurring agreement:"))
+        XCTAssertTrue(content.text.contains("limit resets for each confirmed week with unchanged terms"))
+        XCTAssertTrue(content.text.contains("Each whole week must be covered"))
+        XCTAssertTrue(content.text.contains("no plans or charges are created automatically"))
+        XCTAssertEqual(store.state, before)
+    }
+
+    func testMissingAndLaterChosenDonationDestinationUseTheSamePreservedPlan() throws {
+        let (store, plan, clock) = try fixture(reviewed: false, charityDestination: "")
+        let invitation = SnapshotService.content(plan: plan, store: store, kind: .invitation, includeMoney: false, at: clock.now)
+        XCTAssertTrue(invitation.text.contains("Donation destination: not chosen yet."))
+        try store.recordCharityDestination(planID: plan.id, destination: charity)
+        let updated = SnapshotService.content(plan: plan, store: store, kind: .invitation, includeMoney: false, at: clock.now)
+        XCTAssertTrue(updated.text.contains("Donation destination: \(charity)"))
+        XCTAssertEqual(store.plan(id: plan.id)?.terms.charity, "", "Sharing must not rewrite the original weekly terms")
+        let privateProgress = SnapshotService.content(plan: plan, store: store, kind: .progress, includeMoney: false, at: clock.now)
+        XCTAssertFalse(privateProgress.text.contains(charity))
+    }
+
+    func testUnreviewedCorrectionCannotBeExportedAsReviewedByCallingServiceDirectly() throws {
+        let (store, plan, clock) = try fixture()
+        try store.recordSteps(planID: plan.id, dateKey: plan.dateKeys[0], total: 8000,
+                              reason: "Corrected activity total")
+        let content = SnapshotService.content(plan: plan, store: store, kind: .reviewed, includeMoney: true, at: clock.now)
+        XCTAssertEqual(content.kind, .progress)
+        XCTAssertEqual(content.status, "Correction awaiting review · provisional")
+        XCTAssertFalse(content.moneyLines.contains { $0.hasPrefix("Planned donation:") })
+        XCTAssertFalse(content.text.contains("Reviewed calculation · payment is separate"))
+    }
+
+    func testMistakenSupportRecordIsNotExportedAsAnActiveMatch() throws {
+        let (store, plan, clock) = try fixture(reviewed: false)
+        try store.removeSupport(planID: plan.id, reason: "The match was recorded for the wrong week")
+        XCTAssertFalse(try XCTUnwrap(store.state.effectiveSupport(for: plan.id)).applies)
+        let before = store.state
+        let invitation = SnapshotService.content(plan: plan, store: store, kind: .invitation, includeMoney: true, at: clock.now)
+        XCTAssertFalse(invitation.text.contains(alias))
+        XCTAssertTrue(invitation.text.contains("Invitation — no supporter agreement recorded"))
+        let progress = SnapshotService.content(plan: plan, store: store, kind: .progress, includeMoney: true, at: clock.now)
+        XCTAssertFalse(progress.moneyLines.contains { $0.contains("Extra supporter match calculated:") })
+        XCTAssertFalse(progress.text.contains(alias))
+        XCTAssertEqual(store.state, before)
+    }
+
+    func testFutureDaysAreUpcomingRatherThanMissingEntries() throws {
+        let (store, first, clock) = try fixture(support: false, reviewed: false)
+        let active = SnapshotService.content(plan: first, store: store, kind: .progress, includeMoney: false, at: clock.now)
+        XCTAssertEqual(active.activityLines.filter { $0.contains("Upcoming") }.count, 6)
+        var draft = try store.beginDraft(repeating: first)
+        draft.startDateKey = "2026-10-31"
+        try store.saveDraft(draft)
+        let upcoming = try store.confirmDraft()
+        let content = SnapshotService.content(plan: upcoming, store: store, kind: .progress, includeMoney: false, at: clock.now)
+        XCTAssertEqual(content.activityLines.count, 7)
+        XCTAssertTrue(content.activityLines.allSatisfy { $0.hasSuffix("Upcoming") })
+        XCTAssertFalse(content.activityLines.contains { $0.hasSuffix("Not recorded") })
+    }
+
+    func testShareImagesRenderAtExportSizeWithLongPublicLabels() throws {
+        let exports: [(SnapshotKind, String)] = [
+            (.invitation, "Invitation export"),
+            (.progress, "Progress export"),
+            (.reviewed, "Reviewed export")
+        ]
+        for (kind, name) in exports {
+            let (store, plan, clock) = try fixture(
+                support: kind != .invitation, reviewed: kind == .reviewed,
+                charityDestination: "Community Walking and Neighbourhood Support Foundation — a longer example destination",
+                supporterAlias: "Aunt Alexandra and the family walking supporters")
+            try store.updateProfile(displayName: "Alexandra Morgan — building a regular walking routine", progressionPromptsEnabled: true)
+            let content = SnapshotService.content(plan: plan, store: store, kind: kind, includeMoney: true, at: clock.now)
+            let renderer = ImageRenderer(content: SnapshotCard(content: content)
+                .frame(width: 390).environment(\.colorScheme, .light).dynamicTypeSize(.large))
+            renderer.scale = 3
+            let image = try XCTUnwrap(renderer.uiImage, "\(name) did not render")
+            XCTAssertEqual(image.size.width, 390, accuracy: 0.5, "\(name) has an unexpected export width")
+            XCTAssertGreaterThan(image.size.height, image.size.width, "\(name) should grow to fit its content")
+            XCTAssertGreaterThan(try XCTUnwrap(image.cgImage).height, 0)
+            let attachment = XCTAttachment(image: image)
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
     }
 }

@@ -353,6 +353,221 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(store(repository, time).state, previous)
     }
 
+    func testDraftUpdatesPreserveHistoryAndFailedDraftSaveKeepsLastDurableInput() throws {
+        let repository = MemoryRepository()
+        let time = TestClock()
+        let app = store(repository, time)
+        let plan = try confirm(app)
+        try app.recordSteps(planID: plan.id, dateKey: plan.dateKeys[0], total: 8000)
+        let recordedPlans = app.state.plans
+        let recordedSteps = app.state.stepRevisions
+        let recordedAssessments = app.state.assessments
+        let recordedEvents = app.state.auditEvents
+        var draft = try app.beginDraft(repeating: plan)
+        draft.commitmentText = "35."
+        draft.baseGoalText = ""
+        draft.step = 1
+        try app.saveDraft(draft)
+        let saved = app.state
+        XCTAssertEqual(saved.plans, recordedPlans)
+        XCTAssertEqual(saved.stepRevisions, recordedSteps)
+        XCTAssertEqual(saved.assessments, recordedAssessments)
+        XCTAssertEqual(saved.auditEvents, recordedEvents)
+        let writes = repository.saveCount
+        try app.saveDraft(draft)
+        XCTAssertEqual(repository.saveCount, writes, "Unchanged drafts must not write again.")
+        draft.commitmentText = "40"
+        repository.failSave = true
+        XCTAssertThrowsError(try app.saveDraft(draft))
+        XCTAssertEqual(app.state, saved)
+        repository.failSave = false
+        XCTAssertEqual(store(repository, time).state, saved)
+        try app.saveDraft(draft)
+        XCTAssertEqual(store(repository, time).draft, draft)
+    }
+
+    func testLegacyDraftResumesAtEquivalentStepInReorderedSetup() throws {
+        for (oldStep, newStep) in [0, 2, 3, 1, 4].enumerated() {
+            let repository = MemoryRepository()
+            let time = TestClock()
+            let app = store(repository, time)
+            var legacy = try app.beginDraft()
+            legacy.setupFlowVersion = nil
+            legacy.step = oldStep
+            legacy.baseGoalText = "5000"
+            legacy.commitmentText = "35"
+            try app.saveDraft(legacy)
+            let reopened = store(repository, time)
+            let resumed = try reopened.beginDraft()
+            XCTAssertEqual(resumed.step, newStep)
+            XCTAssertEqual(resumed.setupFlowVersion, 2)
+            XCTAssertEqual(resumed.baseGoalText, legacy.baseGoalText)
+            XCTAssertEqual(resumed.commitmentText, legacy.commitmentText)
+            XCTAssertEqual(store(repository, time).draft, resumed)
+            XCTAssertEqual(try reopened.beginDraft().step, newStep, "Current drafts are not remapped again.")
+        }
+    }
+
+    func testLegacyDraftWithMissingPrerequisiteResumesAtAmountOrEverydayGoal() throws {
+        for oldStep in [1, 2, 4] {
+            let repository = MemoryRepository()
+            let time = TestClock()
+            let app = store(repository, time)
+            var legacy = try app.beginDraft()
+            legacy.setupFlowVersion = nil
+            legacy.step = oldStep
+            legacy.baseGoalText = "5000"
+            legacy.stretchEnabled = true
+            legacy.stretchGoalText = "8000"
+            try app.saveDraft(legacy)
+            let resumed = try store(repository, time).beginDraft()
+            XCTAssertEqual(resumed.step, 1, "Old optional screens need an amount before their exact previews.")
+            XCTAssertEqual(resumed.stretchGoalText, "8000")
+            XCTAssertTrue(resumed.commitmentText.isEmpty)
+        }
+        let repository = MemoryRepository()
+        let time = TestClock()
+        let app = store(repository, time)
+        var legacy = try app.beginDraft()
+        legacy.setupFlowVersion = nil
+        legacy.step = 4
+        legacy.commitmentText = "35"
+        legacy.baseGoalText = ""
+        try app.saveDraft(legacy)
+        XCTAssertEqual(try store(repository, time).beginDraft().step, 0)
+        legacy.baseGoalText = "5000"
+        legacy.handling = .anotherPersonHolds
+        try app.saveDraft(legacy)
+        XCTAssertEqual(try store(repository, time).beginDraft().step, 1)
+    }
+
+    func testInvalidDraftContextCannotReplaceSavedOrConfirmedRecords() throws {
+        let repository = MemoryRepository()
+        let time = TestClock()
+        let app = store(repository, time)
+        let plan = try confirm(app)
+        try app.recordSteps(planID: plan.id, dateKey: plan.dateKeys[0], total: 5000)
+        let saved = app.state
+        var invalid = PlanDraft(startDateKey: "2026-10-31", timezoneID: "America/Toronto")
+        invalid.id = plan.id
+        XCTAssertThrowsError(try app.saveDraft(invalid))
+        invalid.id = app.profile.id
+        XCTAssertThrowsError(try app.saveDraft(invalid))
+        invalid.id = app.state.stepRevisions[0].id
+        XCTAssertThrowsError(try app.saveDraft(invalid))
+        invalid.id = UUID()
+        invalid.timezoneID = "Not/AZone"
+        XCTAssertThrowsError(try app.saveDraft(invalid))
+        invalid.timezoneID = "America/Toronto"
+        invalid.startDateKey = "2026-02-30"
+        XCTAssertThrowsError(try app.saveDraft(invalid))
+        invalid.startDateKey = "2026-10-31"
+        invalid.step = 7
+        XCTAssertThrowsError(try app.saveDraft(invalid))
+        XCTAssertEqual(app.state, saved)
+        XCTAssertEqual(store(repository, time).state, saved)
+    }
+
+    func testDeferredCharityBlocksPositiveReviewUntilAuditedDestinationSurvivesRelaunch() throws {
+        let repository = MemoryRepository()
+        let time = TestClock()
+        let app = store(repository, time)
+        var draft = try app.beginDraft()
+        draft.baseGoalText = "5000"
+        draft.commitmentText = "35"
+        draft.startDateKey = "2026-10-24"
+        draft.timezoneID = "America/Toronto"
+        try app.saveDraft(draft)
+        let plan = try app.confirmDraft()
+        XCTAssertTrue(plan.terms.charity.isEmpty)
+        time.advance(to: "2026-10-31T16:00:00Z")
+        XCTAssertThrowsError(try app.review(planID: plan.id, acknowledgeMissing: true))
+        XCTAssertTrue(app.state.financialEvents.isEmpty)
+        XCTAssertThrowsError(try app.recordCharityDestination(planID: plan.id, destination: "  "))
+        let originalAssessment = app.assessment(for: plan)
+        try app.recordCharityDestination(planID: plan.id, destination: "  Chosen cause  ")
+        XCTAssertTrue(app.plan(id: plan.id)!.terms.charity.isEmpty, "Original terms are preserved.")
+        XCTAssertEqual(app.charityDestination(for: plan), "Chosen cause")
+        XCTAssertEqual(app.assessment(for: plan), originalAssessment)
+        let saved = app.state
+        try app.recordCharityDestination(planID: plan.id, destination: "Chosen cause")
+        XCTAssertEqual(app.state, saved, "Saving the same destination is a no-op.")
+        XCTAssertThrowsError(try app.recordCharityDestination(planID: plan.id, destination: "Different cause"))
+        XCTAssertEqual(app.state.charityDestinations?.count, 1)
+        XCTAssertEqual(app.state.auditEvents.filter { $0.action == .charityDestinationRecorded }.count, 1)
+        let reopened = store(repository, time)
+        XCTAssertEqual(reopened.charityDestination(for: plan), "Chosen cause")
+        try reopened.review(planID: plan.id, acknowledgeMissing: true)
+        try reopened.recordSettlement(planID: plan.id, bucket: .charityAllocation, amountCents: 500, effectiveDateKey: "2026-10-31")
+        let backup = try reopened.exportBackup()
+        try reopened.deleteLocalData()
+        try reopened.restoreBackup(backup)
+        XCTAssertEqual(reopened.charityDestination(for: plan), "Chosen cause")
+        XCTAssertEqual(reopened.reconciliation(for: plan, bucket: .charityAllocation).recordedCents, 500)
+    }
+
+    func testFullReturnCanBeReviewedWithoutCharityButCorrectionWithRemainderNeedsChoice() throws {
+        let repository = MemoryRepository()
+        let time = TestClock()
+        let app = store(repository, time)
+        var draft = try app.beginDraft()
+        draft.baseGoalText = "5000"
+        draft.commitmentText = "35"
+        draft.startDateKey = "2026-10-24"
+        draft.timezoneID = "America/Toronto"
+        try app.saveDraft(draft)
+        let plan = try app.confirmDraft()
+        time.advance(to: "2026-10-30T16:00:00Z")
+        for key in plan.dateKeys { try app.recordSteps(planID: plan.id, dateKey: key, total: 5000) }
+        time.advance(to: "2026-10-31T16:00:00Z")
+        try app.review(planID: plan.id, acknowledgeMissing: false)
+        XCTAssertEqual(app.assessment(for: plan).charityAllocationCents, 0)
+        let posted = app.state.financialEvents
+        try app.recordSteps(planID: plan.id, dateKey: plan.dateKeys[0], total: 0, reason: "Corrected total")
+        XCTAssertThrowsError(try app.review(planID: plan.id, acknowledgeMissing: false))
+        XCTAssertEqual(app.state.financialEvents, posted)
+        try app.recordCharityDestination(planID: plan.id, destination: "Chosen cause")
+        try app.review(planID: plan.id, acknowledgeMissing: false)
+        XCTAssertEqual(app.assessment(for: plan).charityAllocationCents, 500)
+    }
+
+    func testDeferredCharityChoiceRemainsHistoricalWhenUpcomingPlanIsCancelled() throws {
+        let repository = MemoryRepository()
+        let time = TestClock()
+        let app = store(repository, time)
+        var draft = try app.beginDraft()
+        draft.baseGoalText = "5000"
+        draft.commitmentText = "35"
+        draft.startDateKey = "2026-10-25"
+        draft.timezoneID = "America/Toronto"
+        try app.saveDraft(draft)
+        let plan = try app.confirmDraft()
+        try app.recordCharityDestination(planID: plan.id, destination: "Chosen cause")
+        try app.voidScheduled(planID: plan.id, reason: "Plans changed before starting")
+        let cancelled = app.plan(id: plan.id)!
+        XCTAssertEqual(app.lifecycle(for: cancelled), .voidedBeforeStart)
+        XCTAssertEqual(app.charityDestination(for: cancelled), "Chosen cause")
+        XCTAssertTrue(app.state.financialEvents.isEmpty)
+        XCTAssertTrue(app.state.settlements.isEmpty)
+        let saved = app.state
+        XCTAssertEqual(store(repository, time).state, saved)
+        let backup = try app.exportBackup()
+        try app.deleteLocalData()
+        try app.restoreBackup(backup)
+        XCTAssertEqual(app.state, saved)
+        XCTAssertThrowsError(try app.recordCharityDestination(planID: plan.id, destination: "Another cause"))
+    }
+
+    func testOriginalCharityCannotBeChangedByDeferredDestinationAction() throws {
+        let repository = MemoryRepository()
+        let time = TestClock()
+        let app = store(repository, time)
+        let plan = try confirm(app)
+        XCTAssertThrowsError(try app.recordCharityDestination(planID: plan.id, destination: "Another charity"))
+        XCTAssertEqual(app.charityDestination(for: plan), "Chosen charity")
+        XCTAssertNil(app.state.charityDestinations)
+    }
+
     func testAtomicJSONRepositoryDurablyReplacesSnapshot() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }

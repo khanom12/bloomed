@@ -16,109 +16,197 @@ final class BloomedUITests: XCTestCase {
     func testFreshInstallationHasFourPurposefulEmptyTabs() {
         XCTAssertTrue(app.buttons["Create your walking plan"].waitForExistence(timeout: 8))
         XCTAssertFalse(app.buttons["update-today-steps"].exists)
-
         for title in ["Today", "My plan", "Progress", "Money"] {
-            XCTAssertTrue(app.tabBars.buttons[title].exists, "Missing tab: \(title)")
+            XCTAssertTrue(app.tabBars.buttons[title].exists)
         }
-
         app.tabBars.buttons["My plan"].tap()
-        XCTAssertTrue(app.staticTexts["A routine that fits your life."].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Make your first walking plan"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["Create your walking plan"].exists)
-
         app.tabBars.buttons["Progress"].tap()
-        XCTAssertTrue(app.staticTexts["Room for your story."].waitForExistence(timeout: 3))
-
-        app.tabBars.buttons["Money"].tap()
-        XCTAssertTrue(app.staticTexts["A clear record from the start."].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.staticTexts["This week's commitment"].exists, "A fresh install must not fabricate a commitment.")
-
-        app.tabBars.buttons["Today"].tap()
+        XCTAssertTrue(app.staticTexts["See your walking take shape"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["Create your walking plan"].exists)
-        attachScreenshot("Fresh Today")
+        app.tabBars.buttons["Money"].tap()
+        XCTAssertTrue(app.buttons["Create your walking plan"].waitForExistence(timeout: 3))
+        XCTAssertFalse(element("money.current-week").exists)
+        app.tabBars.buttons["Today"].tap()
+        attachScreenshot("First-use product explanation")
     }
 
     func testSingleGoalPlanCanStartTodayRecordTotalAndShowMoney() {
-        beginPlan(base: "5000")
-
-        let stretch = app.switches["plan.stretchEnabled"]
-        XCTAssertTrue(stretch.waitForExistence(timeout: 3))
-        XCTAssertEqual(stretch.value as? String, "0", "Stretch must be optional and off initially.")
-        tap("plan.continue")
-
-        let consistency = app.switches["plan.consistencyEnabled"]
-        XCTAssertTrue(consistency.waitForExistence(timeout: 3))
-        XCTAssertEqual(consistency.value as? String, "0", "Consistency must be optional and off initially.")
-        tap("plan.continue")
-
-        enter("35.00", into: "plan.commitment")
-        enter("Walking plan test charity", into: "plan.charity")
-        let keyboardDone = app.buttons["keyboard.done"]
-        if keyboardDone.exists && keyboardDone.isHittable { keyboardDone.tap() }
-        attachScreenshot("Completed commitment arrangement")
-        tap("plan.continue")
-
+        reachReview()
         tap("plan.startToday")
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Today is Day 1")).firstMatch.exists)
-        let confirm = app.buttons["plan.confirm"]
-        XCTAssertTrue(confirm.waitForExistence(timeout: 3))
-        XCTAssertTrue(confirm.isEnabled)
-        confirm.tap()
-
-        XCTAssertTrue(app.staticTexts["Your week is ready."].waitForExistence(timeout: 5))
-        app.buttons["Done"].firstMatch.tap()
-
-        let update = app.buttons["update-today-steps"]
-        XCTAssertTrue(update.waitForExistence(timeout: 5), "Starting today must make daily entry available.")
+        confirmPlan()
         tap("update-today-steps")
         enter("5000", into: "entry.total")
         tap("entry.save")
-
         XCTAssertTrue(app.staticTexts["5,000 steps recorded"].waitForExistence(timeout: 5))
-        attachScreenshot("Active Today after first entry")
+        attachScreenshot("Active Today with recorded steps")
         app.tabBars.buttons["Money"].tap()
-        XCTAssertTrue(app.staticTexts["This week's commitment"].waitForExistence(timeout: 3))
-        let earned = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "Your money earned back", "5.00")).firstMatch
-        XCTAssertTrue(earned.waitForExistence(timeout: 3), "One successful day of a CAD 35 single-goal week must show CAD 5 earned back.")
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "charity allocation awaits review")).firstMatch.exists)
-        XCTAssertFalse(app.buttons["Record donation made"].exists, "An active week must not offer final settlement.")
-        attachScreenshot("Active single-goal money")
-
-        // Saving an updated daily total replaces it instead of accumulating it.
+        XCTAssertTrue(element("money.current-week").waitForExistence(timeout: 3))
+        let earned = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@ AND label CONTAINS %@", "earned back", "5.00")).firstMatch
+        XCTAssertTrue(earned.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Record donation made"].exists)
+        attachScreenshot("Active Money estimates")
         app.tabBars.buttons["Today"].tap()
         tap("update-today-steps")
-        let entry = element("entry.total")
-        XCTAssertTrue(entry.waitForExistence(timeout: 3))
-        entry.tap()
-        entry.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4) + "6000")
+        replace("5000", with: "6000", in: "entry.total")
         tap("entry.save")
         XCTAssertTrue(app.staticTexts["6,000 steps recorded"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.staticTexts["11,000 steps recorded"].exists)
     }
 
-    func testStretchMustExceedBaseBeforeContinuing() {
+    func testHigherGoalValidationAndConsistencyExplainExactAmounts() {
         beginPlan(base: "5000")
-        let toggle = app.switches["plan.stretchEnabled"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 3))
-        toggle.tap()
-        XCTAssertFalse(app.buttons["plan.continue"].isEnabled)
-
-        enter("5000", into: "plan.stretch")
-        XCTAssertFalse(app.buttons["plan.continue"].isEnabled, "Equal targets cannot create two tiers.")
-
-        let field = element("plan.stretch")
-        field.tap()
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4) + "8000")
-        XCTAssertTrue(app.buttons["plan.continue"].isEnabled)
+        enter("35.00", into: "plan.commitment")
+        XCTAssertTrue(app.buttons["plan.continue"].isEnabled, "Charity may be chosen later")
         tap("plan.continue")
-        XCTAssertTrue(app.switches["plan.consistencyEnabled"].waitForExistence(timeout: 3))
+        let higher = app.switches["plan.stretchEnabled"]
+        XCTAssertTrue(higher.waitForExistence(timeout: 3))
+        XCTAssertEqual(higher.value as? String, "0")
+        higher.tap()
+        XCTAssertFalse(app.buttons["plan.continue"].isEnabled)
+        enter("5000", into: "plan.stretch")
+        XCTAssertFalse(app.buttons["plan.continue"].isEnabled)
+        replace("5000", with: "8000", in: "plan.stretch")
+        XCTAssertTrue(app.buttons["plan.continue"].isEnabled)
+        attachScreenshot("Higher goal financial tradeoff")
+        tap("plan.continue")
+        let consistency = app.switches["plan.consistencyEnabled"]
+        XCTAssertTrue(consistency.waitForExistence(timeout: 3))
+        consistency.tap()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "7.00", "35.00")).firstMatch.waitForExistence(timeout: 3))
+        attachScreenshot("Consistency from the same amount")
+        tap("plan.continue")
+        XCTAssertTrue(app.buttons["plan.confirm"].waitForExistence(timeout: 3))
+    }
+
+    func testSavedDraftResumesFromEitherTabWithoutLosingAmount() {
+        beginPlan(base: "5000")
+        enter("35.00", into: "plan.commitment")
+        tap("plan.continue")
+        XCTAssertTrue(app.switches["plan.stretchEnabled"].waitForExistence(timeout: 3))
+        app.buttons["Save & close"].tap()
+        app.tabBars.buttons["My plan"].tap()
+        tap("Continue your walking plan")
+        XCTAssertTrue(app.switches["plan.stretchEnabled"].waitForExistence(timeout: 3))
+        tap("Back")
+        let amount = element("plan.commitment")
+        XCTAssertTrue(amount.waitForExistence(timeout: 3))
+        XCTAssertEqual(amount.value as? String, "35.00")
+        app.buttons["Save & close"].tap()
+        app.tabBars.buttons["Today"].tap()
+        tap("Continue your walking plan")
+        XCTAssertTrue(element("plan.commitment").waitForExistence(timeout: 3))
+    }
+
+    func testInvitationStartsInInvitationModeWithoutRecordingSupport() {
+        reachReview()
+        tap("plan.confirm")
+        XCTAssertTrue(app.staticTexts["Your week is ready."].waitForExistence(timeout: 5))
+        tap("Invite a supporter · optional")
+        tap("support.invite")
+        let invitation = app.segmentedControls.buttons["Invitation"]
+        XCTAssertTrue(invitation.waitForExistence(timeout: 3))
+        XCTAssertTrue(invitation.isSelected)
+        XCTAssertFalse(element("support.alias").exists)
+        attachScreenshot("Recipient-oriented invitation preview")
+        app.navigationBars["Preview before sharing"].buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["support.record-agreement"].waitForExistence(timeout: 3), "Sharing preparation must not record a supporter")
+    }
+
+    func testProgressMonthAndHistoryOpenWalkingInsteadOfAgreement() {
+        reachReview()
+        tap("plan.startToday")
+        confirmPlan()
+        tap("update-today-steps")
+        enter("5000", into: "entry.total")
+        tap("entry.save")
+        app.tabBars.buttons["Progress"].tap()
+        let month = app.segmentedControls.buttons["Month"]
+        XCTAssertTrue(month.waitForExistence(timeout: 3))
+        month.tap()
+        XCTAssertTrue(app.staticTexts["Your walking calendar"].waitForExistence(timeout: 3))
+        attachScreenshot("Monthly walking calendar")
+        app.segmentedControls.buttons["Week"].tap()
+        let week = app.buttons.matching(identifier: "walking.history-week").firstMatch
+        XCTAssertTrue(week.waitForExistence(timeout: 3))
+        reveal(week)
+        week.tap()
+        XCTAssertTrue(app.navigationBars["Weekly walking"].waitForExistence(timeout: 3))
+        attachScreenshot("Historical walking detail")
+    }
+
+    func testRapidContinueDoesNotSkipTheHigherGoalChoice() {
+        beginPlan(base: "5000")
+        enter("35.00", into: "plan.commitment")
+        let done = app.buttons["keyboard.done"]
+        if done.exists && done.isHittable { done.tap() }
+        app.buttons["plan.continue"].doubleTap()
+        XCTAssertTrue(app.switches["plan.stretchEnabled"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.switches["plan.consistencyEnabled"].exists)
+    }
+
+    func testLargestTextInDarkModeCanCreatePlanAndRecordSteps() {
+        app.terminate()
+        app.launchArguments += ["--ui-testing-large-text", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        reachReview()
+        tap("plan.startToday")
+        attachScreenshot("Largest text dark review")
+        confirmPlan()
+        tap("update-today-steps")
+        enter("5000", into: "entry.total")
+        tap("entry.save")
+        XCTAssertTrue(app.staticTexts["5,000 steps recorded"].waitForExistence(timeout: 5))
+        attachScreenshot("Largest text dark recorded steps")
+    }
+
+    func testMyPlanCanOpenAnAlreadyAgreedMatchDirectly() {
+        reachReview()
+        tap("plan.confirm")
+        XCTAssertTrue(app.staticTexts["Your week is ready."].waitForExistence(timeout: 5))
+        app.buttons["Done"].firstMatch.tap()
+        app.tabBars.buttons["My plan"].tap()
+        let planCard = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "View plan details")).firstMatch
+        XCTAssertTrue(planCard.waitForExistence(timeout: 3))
+        reveal(planCard)
+        planCard.tap()
+        tap("Record an agreement already made")
+        XCTAssertTrue(element("support.alias").waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["support.record-agreement"].exists)
+        attachScreenshot("Direct supporter agreement form")
     }
 
     private func beginPlan(base: String) {
-        let create = app.buttons["Create your walking plan"]
-        XCTAssertTrue(create.waitForExistence(timeout: 8))
-        create.tap()
+        tap("Create your walking plan")
         enter(base, into: "plan.base")
         tap("plan.continue")
+        XCTAssertTrue(element("plan.commitment").waitForExistence(timeout: 3), "Money must be explained before optional financial choices")
+    }
+
+    private func reachReview() {
+        beginPlan(base: "5000")
+        enter("35.00", into: "plan.commitment")
+        tap("plan.continue")
+        XCTAssertTrue(app.switches["plan.stretchEnabled"].waitForExistence(timeout: 3))
+        tap("plan.continue")
+        XCTAssertTrue(app.switches["plan.consistencyEnabled"].waitForExistence(timeout: 3))
+        tap("plan.continue")
+        XCTAssertTrue(app.buttons["plan.confirm"].waitForExistence(timeout: 3))
+    }
+
+    private func confirmPlan() {
+        tap("plan.confirm")
+        XCTAssertTrue(app.staticTexts["Your week is ready."].waitForExistence(timeout: 5))
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["update-today-steps"].waitForExistence(timeout: 5))
+    }
+
+    private func replace(_ old: String, with value: String, in identifier: String) {
+        let field = element(identifier)
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count) + value)
     }
 
     private func element(_ identifier: String) -> XCUIElement {

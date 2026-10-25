@@ -3,12 +3,12 @@
 | Field | Value |
 |---|---|
 | Document ID | BLM-PRD-001 |
-| Version | 0.1 |
-| Date | 2026-10-24 |
-| Status | Proposed development baseline, prepared for product review and implementation handoff |
+| Version | 0.2 |
+| Date | 2026-10-25 |
+| Status | Development baseline incorporating the authorized walkthrough improvements; implementation defaults remain identified separately |
 | Product | Bloomed MVP |
 | Audience | Product owner, designer, Codex, application developer, QA |
-| Implementation status | v0.1 specification baseline; current implementation and test status are tracked in the repository README |
+| Implementation status | Implemented native draft; current build, test, and device evidence are tracked in the repository README and implementation notes |
 
 > **Product promise:** Make a realistic walking commitment, earn your own commitment back, and optionally invite someone to match your progress.
 
@@ -64,7 +64,9 @@ These are provisional baseline choices, not claims of independently approved pol
 | DEF-11 | Confirm every new weekly commitment; saved templates and recorded standing support may prefill it | Repetition without automatic financial obligations |
 | DEF-12 | Active weeks retain their original seven-day rules; no automatic early-stop prorating | Avoid an unagreed exception formula; see §5.5 |
 
-Changing a default that affects calculated outcomes requires updating the rule version, examples, fixtures, and acceptance scenarios together. Changing display design alone does not change financial rules.
+The owner authorized implementing the walkthrough improvements on October 25, 2026, including the earlier suggestion to make charity entry optional during setup. The revised five-screen order, progressive disclosure, deferred-destination record, calendar treatment, and draft-save strategy are implementation choices made within that authorization, not claims of independently approved design details.
+
+Changing a default that affects calculated outcomes requires updating the rule version, examples, fixtures, and acceptance scenarios together. The changes in v0.2 preserve `bloomed.walk.v1`, the numerical fixtures, and the existing integer-cent formulas; changing display design or when a destination is supplied does not change financial qualification.
 
 ## 2. Product, audience, and boundaries
 
@@ -85,7 +87,7 @@ A future account may both participate and support others. Do not encode one perm
 
 ### 2.3 Included
 
-Guided plan setup; one or two daily walking targets; optional five-of-seven consistency allocation; personal commitment; at most one applicable supporter match per week; static invitations and progress/final summaries; participant-recorded recurring support; manual steps and corrections; weekly review; separate walking and money history; partial external settlement records; accessible light/dark interface; offline storage; full-fidelity backup export/import; deterministic calculations and meaningful automated tests.
+Guided plan setup; one or two daily walking targets; optional five-of-seven consistency allocation; personal commitment; at most one applicable supporter match per week; static invitations and progress/final summaries; participant-recorded recurring support; manual steps and corrections; weekly review; optional charity entry during setup with an audited later choice before reviewing a positive charity amount; separate walking and money history, including Week/Month walking views; partial external settlement records; accessible light/dark interface; offline storage; full-fidelity backup export/import; deterministic calculations and meaningful automated tests.
 
 ### 2.4 Excluded
 
@@ -110,29 +112,43 @@ Nonfinancial encouragement, live supporter access, custom challenges, and sponso
 | External settlement | A participant's record of money retained, returned, received, or donated outside Bloomed |
 | Snapshot | A static export as of a timestamp, not a live or independently verified record |
 
-Four persistent tabs: **Today**, **My plan**, **Progress**, **Money**. Settings, backup, and app information are secondary destinations. A dedicated challenge tab is unnecessary for one embedded consistency challenge. Screens must use the same evaluator and assessment records.
+Four persistent tabs: **Today**, **My plan**, **Progress**, **Money**. Today prioritizes the next daily/review action; My plan preserves agreed goals, dates, and amounts; Progress explains walking over time; Money distinguishes calculations from outside records. Settings, backup, and app information are secondary destinations. A dedicated challenge tab is unnecessary for one embedded consistency challenge. Screens must use the same evaluator and assessment records.
+
+User-facing copy uses **everyday goal** for the domain's base goal, **higher goal** for stretch, **your weekly amount** for personal commitment, **money earned back** for personal return, and **supporter match** for additional supporter reward. Domain identifiers and rule meanings do not change. Explain the own-money/charity mechanism before asking the participant to interpret its amounts; do not rely on prior marketing exposure.
+
+Progress provides Week and Month views. The native month calendar distinguishes no plan, upcoming date, missing record, recorded below everyday goal, everyday goal reached, and higher goal reached. Explicit zero stays an actual recorded value, distinct from missing. Calendar details use each date's preserved targets and timezone; if two nonoverlapping plans in different timezones share a local date key, retain and show both records. Historical week cards open walking detail first, with secondary links to the preserved plan and money.
 
 ## 4. Onboarding and plan confirmation
 
 ### 4.1 Required setup sequence
 
-**ONB-01 — Base:** ask for a realistic everyday step target. Input is a positive whole number from 1 to 100,000. Suggestions are examples, not health recommendations, minimum requirements, or preaccepted commitments. No plan starts with an unconfirmed suggested value.
+Use five screens in this order: **Everyday goal → Your weekly amount and outside arrangement → Optional higher goal → Optional consistency → Dates and review**. Amounts are known before financial options are explained. The stable requirement IDs below are not screen numbers.
 
-**ONB-02 — Stretch:** off by default. If enabled, require a whole-number target strictly greater than base and no greater than 100,000. Explain that the target should be repeatable. There are exactly two rewarded levels in this baseline; no automatic middle tier.
+**ONB-01 — Everyday goal:** ask for a realistic everyday step target. Input is a positive whole number from 1 to 100,000. Suggestions are examples, not health recommendations, minimum requirements, or preaccepted commitments. No plan starts with an unconfirmed suggested value. An optional private reason is collapsed and excluded from sharing by default.
 
-**ONB-03 — Consistency:** off by default. If enabled, explain: base goal on any five of the seven dates; stretch days count; the reserve comes from the same budget. The participant does not configure percentages, streak lengths, or bonus types.
+**ONB-04 — Weekly amount:** require one seven-day amount in CAD within DEF-08. No default monetary stake. Parse decimal input safely, rejecting more than two decimal places, negatives, ambiguous separators, and amounts outside bounds. Explain that this is the participant's own money, walking determines how much is retained/returned, and the amount not earned back is for charity after review. No money is collected by Bloomed.
 
-**ONB-04 — Commitment:** require one seven-day amount in CAD within DEF-08. No default monetary stake. Parse decimal input safely, reject more than two decimal places, negatives, ambiguous separators, and amounts outside bounds. Explain both full recovery and the possibility of an unreturned portion.
+**ONB-05 — Outside arrangement and optional destination:** show who keeps the money: the participant, another person, or another outside arrangement. Require a short handler description for the latter two; no bank/contact details are needed. Charity name/description is optional during setup. Blank means **Choose later**, not that unearned money is kept or that the charity rule is waived. A positive charity allocation cannot be reviewed until its destination has been recorded under §5.3. Explain that the participant arranges any donation outside Bloomed.
 
-**ONB-05 — Outside arrangement:** require charity name/description and money handling selection: `I retain the funds`, `Another person holds them`, or `Other external arrangement`. A free-text handler description is required for the latter two. No bank/contact details are required. Explain that recording a commitment does not move money.
+**ONB-02 — Higher goal:** off by default. If enabled, require a whole-number target strictly greater than the everyday goal and no greater than 100,000. Explain that it should be repeatable. Before confirmation, visibly explain the material tradeoff: enabling a higher goal reduces the return for reaching only the everyday goal to 25% of that day's maximum, rounded down; the higher goal earns the full daily maximum. These are alternatives, not additive amounts. Show actual amount/range previews and the seven-everyday-days outcome; exact dated amounts remain available. There are exactly two rewarded levels; no automatic middle tier. This disclosure changes no formula.
 
-**ONB-06 — Dates:** choose a start date of today or later; no backdated financial plans. Default tomorrow in the selected plan timezone. Show all seven dates and the timezone. Starting today counts the whole date's manually entered total, including walking before confirmation; show that explicitly. Do not prorate the first day.
+**ONB-03 — Consistency:** off by default. If enabled, explain: everyday goal on any five of the seven dates; higher-goal days count; days need not be consecutive. Show the actual reserved amount and daily amount/range after the same weekly budget is redistributed. The reserve is 20% rounded down to cents, not extra money above the commitment. The participant does not configure percentages, streak lengths, or bonus types.
 
-**ONB-07 — Review:** show exact daily return amounts, consistency amount and condition, maximum personal return, charity destination, handling arrangement, all dates, timezone, and external/manual boundaries. If cent distribution differs by date, show the exact schedule. Full return requires the highest selected goal on all seven dates. A five-day consistency bonus does not by itself guarantee full return.
+**ONB-06 — Dates:** choose a start date of today or later; no backdated financial plans. Default tomorrow in the selected plan timezone. Provide start-today/start-tomorrow shortcuts and a start-date selector. Show all seven dates and a human-readable timezone, with a change action; retain the IANA identifier in data. The timezone initially follows the device and stays pinned for the confirmed week. Starting today counts the whole date's manually entered total, including walking before confirmation; show that explicitly. Do not prorate the first day.
 
-**ONB-08 — Confirm:** require an explicit `Confirm this week's commitment` action. Save the preserved terms and audit event atomically before showing success. Offer optional supporter invitation after confirmation; it must not block independent participation.
+**ONB-07 — Review:** show exact daily return amounts, consistency amount and condition, maximum personal return, charity destination or Choose later, handling arrangement, all dates, timezone, and external/manual boundaries. Daily summary ranges must identify cent variation and provide the exact dated schedule. Full return requires the highest selected goal on all seven dates. Five-day consistency does not by itself guarantee full return. Keep the original seven-day/early-stop rule visible in plain language, with exceptional-arrangement detail disclosed separately.
 
-Drafts survive navigation and relaunch. Validation is inline and accessible. Back navigation preserves entered values. No contact permission, health permission, payment information, or supporter recruitment is required.
+**ONB-08 — Confirm:** require an explicit **Confirm this week's plan** action. Save preserved terms and audit event atomically before showing success. Show goals, amount, dates, and that no money has moved. Offer Done and optional supporter setup; support never blocks independent participation.
+
+### 4.2 Drafts, validation, and responsive transitions
+
+Drafts survive navigation and relaunch after durable save. All plan entry points use **Continue your walking plan** when a draft exists and resume its saved step. Earlier drafts with no setup-flow version retain values and map their saved step into the revised order; current drafts use setup-flow version 2.
+
+Coalesce typing autosaves after a 350 ms quiet interval rather than saving and reevaluating all confirmed history on every keystroke. Saving an unchanged draft is a no-op. The draft-only storage path validates draft identity, timezone, start date, and supported flow/step against already validated confirmed state; complete confirmed mutations and loaded/restored data still receive full validation. This optimization does not bypass financial validation at confirmation.
+
+Continue/Back save the complete next draft before advancing. Save & close, confirmation, backgrounding, and disappearance flush pending draft changes; cancel a scheduled autosave after confirmation or discard so it cannot recreate the draft. Show pending/error feedback, preserve entered values on failure, provide retry, and prevent an accidental swipe from discarding pending/failed input. A sudden termination before an autosave/flush can recover only the last durable draft; do not claim unsaved keystrokes were committed.
+
+Validation is inline and accessible. A disabled Continue explains the specific missing requirement. Back preserves values, keyboard dismissal is available, and a valid action responds to one activation without duplicate commitments. The reported multi-tap/lag behavior is a reproduction and validation concern, not a proven performance root cause. No contact permission, health permission, payment information, or supporter recruitment is required.
 
 ## 5. Plan lifecycle, dates, and continuation
 
@@ -167,11 +183,15 @@ At the end, present seven entries and the assessment. Missing entries provisiona
 
 Review confirms a calculation from participant records; it does not verify walking or payment. Store the entry revision, assessment revision, review timestamp, and acknowledgement of missing dates. A changed source entry or applicable support record on a reviewed week transitions it back to `awaitingReview`, even when rounded financial totals happen to remain equal. Retain all prior reviewed assessments and mark this specifically as a correction awaiting review.
 
+If the original weekly terms name no charity, require an effective destination before confirming **any** review whose charity allocation is positive, including a corrected review after an earlier zero-charity result. A zero-charity review may remain unnamed. Do not replace a blank destination with a fictitious charity or silently change the allocation formula.
+
+Record a later choice as one immutable, additive `CharityDestinationRecord` for the confirmed, nonvoided plan. It contains stable ID, plan/participant/actor IDs, destination, timestamp, and transaction key, plus an audit event. It is permitted only when the original `PlanTerms.charity` is blank. An identical repeated choice is a no-op; an attempt to replace it, add another destination, or overwrite an originally named charity is rejected. Its timestamp must be at or after plan confirmation and at or before every reviewed positive allocation that relies on it. Resolve display/export/repetition through the original destination when named, otherwise the additive record. If the plan is later cancelled before its start, retain the earlier destination record; reject a new choice after cancellation. Neither original terms nor R/A/M are rewritten by choosing a destination. A separate future policy is needed to change an already named destination.
+
 There is no arbitrary late-entry deadline in the MVP. Past entries can be corrected under §10. Future dates cannot be entered.
 
 ### 5.4 Repeat and progression
 
-**PLAN-01:** `Repeat this plan` prepares a new draft with the same targets, allocation rule, commitment, charity, and handling arrangement. Default the start to the later of the prior week's next date or tomorrow, adjusted forward to avoid confirmed overlaps. The participant can explicitly select today if nonoverlapping and accept the partial-day disclosure. Show any gap. Do not extend the old budget or silently create obligations during inactivity.
+**PLAN-01:** `Repeat this plan` prepares a new draft with the same targets, allocation rule, commitment, effective charity destination, and handling arrangement. Default the start to the later of the prior week's next date or tomorrow, adjusted forward to avoid confirmed overlaps. The participant can explicitly select today if nonoverlapping and accept the partial-day disclosure. Show any gap. Do not extend the old budget or silently create obligations during inactivity.
 
 **PLAN-02:** `Adjust next week` edits the draft; the active and historical weeks remain unchanged. Goal changes never automatically increase personal money or supporter caps.
 
@@ -291,7 +311,9 @@ When consistency is disabled, `K` is zero. The current day's unearned difference
 
 **SUP-01:** At most one applicable supporter per weekly plan. Capture local alias, cap `S`, currency, coverage, externally agreed date, recorder, and optional standing-agreement reference. Require `We agreed to this outside Bloomed` before activating the record. Alias is not an authenticated identity. Do not store contact details by default.
 
-An invitation is a proposal, not a commitment. An exported invitation does not activate matching. Label applicable records `Agreement recorded by you`.
+Offer distinct **Prepare invitation** and **Record agreed match** actions. Invitation starts an invitation preview, not a progress export; recording opens the outside-agreement form. An invitation is a proposal, not a commitment. An exported invitation does not activate matching, contact the supporter automatically, or establish acceptance. Label applicable records `Agreement recorded by you`.
+
+Explain a cap in plain dollars and show the largest possible match for the current plan. A cap above C remains allowed within the input bounds, but cannot multiply the 1:1 match: with C=$35 and S=$350, the maximum possible match is $35 and the remainder stays with the supporter.
 
 ### 8.2 Matching formula
 
@@ -316,13 +338,13 @@ A standing agreement records a weekly cap, effective start, optional inclusive e
 
 Changes outside those terms require recording renewed external agreement. An applicable standing agreement is snapshotted when the new week is confirmed; a later whole-week agreement is snapshotted when it is recorded. Preserve snapshots as append-only revisions with exactly one effective support state per week. Correcting a mistaken cap, coverage, or applicability creates a new revision, never an in-place overwrite. Corrections to reviewed weeks follow §10, including rereview and settlement posting restrictions. Pausing or ending standing support prevents future reuse and does not erase an already-confirmed week's agreement. External exceptions use §5.5.
 
-The participant still confirms every week. A recorded recurring pledge is not a bank subscription, proof of funds, or independently confirmed supporter action.
+The participant still confirms every week. Clearly state that the cap resets for each eligible confirmed week; it is not one allowance spread across the whole recurrence period. A recorded recurring pledge is not a bank subscription, proof of funds, or independently confirmed supporter action.
 
 ## 9. Money records and external settlement
 
 ### 9.1 Categories and language
 
-Show personal commitment, personal return, charity allocation, supporter cap, supporter reward, and unused supporter allowance separately. Identify provisional/unreviewed versus reviewed assessment revisions. Do not use `Withdraw`, `Deposit now`, app-held balance, verified donation, or automatic refund language.
+Show personal commitment, personal return, charity allocation, supporter cap, supporter reward, and unused supporter allowance separately. Identify provisional/unreviewed versus reviewed assessment revisions beside the values they qualify, using estimate or reviewed labels. An absent outside record does not establish that a payment was not made; label the recording gap without calling it unpaid. Do not use `Withdraw`, `Deposit now`, app-held balance, verified donation, or automatic refund language.
 
 The outside handling arrangement determines whether the participant retains their return or receives it from another holder. Both have the same calculated entitlement but different accurate action labels.
 
@@ -355,11 +377,11 @@ An excess donation is not an automatic refund entitlement. Bloomed does not reco
 
 ### 9.4 Historical totals
 
-Money opens with a current-week card and a history list. Separate confirmed commitment totals, reviewed personal returns, reviewed supporter rewards, reviewed charity allocations, externally recorded settlements, outstanding amounts, and excess records. Do not add personal principal to supporter rewards under a misleading total-earnings label.
+Money opens with a state-specific current-week card and a history list. An upcoming week shows readiness, weekly amount, start date, and possible match, rather than a zero-earnings dashboard. Hide reviewed-history totals until at least one reviewed week exists. Separate confirmed commitment totals, reviewed personal returns, reviewed supporter rewards, reviewed charity allocations, externally recorded settlements, outstanding amounts, and excess records. Do not add personal principal to supporter rewards under a misleading total-earnings label.
 
 Exclude voided plans and drafts from assessed totals. Keep current/unreviewed estimates outside reviewed totals. Outstanding balances may remain while new weeks begin. Use date filters consistently and never mix currencies.
 
-For historical outcome summaries, attribute an entire week's commitment and latest reviewed R/A/M to its plan start date; do not split the weekly consistency return across months. Attribute actual settlement totals to each settlement's effective date. Label outcome-period and payment-date summaries separately. A week awaiting correction review retains its latest previously reviewed values in posted historical totals, with a correction-pending indicator; do not silently replace them with unreviewed values. MVP requires a history list, not date-filter controls, but later aggregates must follow these attribution rules.
+For historical outcome summaries, attribute an entire week's commitment and latest reviewed R/A/M to its plan start date; do not split the weekly consistency return across months. Attribute actual settlement totals to each settlement's effective date. Label outcome-period and payment-date summaries separately. A week awaiting correction review retains its latest previously reviewed values in posted historical totals, with a correction-pending indicator; do not silently replace them with unreviewed values. Money requires a history list, not financial date-filter controls; the walking Month view does not change financial attribution. Later financial aggregates must follow these attribution rules.
 
 ## 10. Corrections, audit, and reliability
 
@@ -411,6 +433,7 @@ No telemetry, third-party analytics, advertising SDK, contact upload, or externa
 | `PlanTemplate` | Reusable draft defaults; not an automatically active obligation |
 | `WeeklyPlan` | ID, participant, state, seven dates, timezone, currency, preserved target/rule/arrangement terms, rule version |
 | `DailyStepRevision` | Plan date, total or cleared/missing state, manual source, actor, timestamps, predecessor |
+| `CharityDestinationRecord` | Single additive, audited destination for an originally unnamed confirmed plan; never mutates original terms |
 | `SupportAgreement` | Outside agreement metadata, whole-week or standing coverage, cap, rate/rule, terms fingerprint, recorder |
 | `WeeklySupportSnapshot` | Append-only applicable-terms revisions for one week, one effective state, separately from standing agreement |
 | `AssessmentRevision` | Input revision fingerprint, exact daily schedule/results, consistency, R/A/M/U, review status |
@@ -419,13 +442,13 @@ No telemetry, third-party analytics, advertising SDK, contact upload, or externa
 | `AuditEvent` | Stable ID, entity, action, timestamp, actor, reason, before/after references |
 | `ExceptionRecord` | External disagreement/resolution note with preserved history |
 
-All durable records require stable IDs, a versioned export representation, and ownership metadata. Enforce uniqueness of effective step total by plan/date and effective support revision by plan. Names never serve as identity keys.
+All durable records require stable IDs, a versioned export representation, and ownership metadata. Enforce uniqueness of effective step total by plan/date, effective support revision by plan, and later charity destination by plan and transaction key. Names never serve as identity keys.
 
 ### 12.2 Separation of concerns
 
 Keep walking qualification, monetary calculation, lifecycle transitions, and reconciliation independent of UI and persistence. Pure evaluators consume immutable inputs and return deterministic results; they do not send messages, write a database, or read device time directly. Inject clock, calendar/timezone service, ID generator, persistence, and export renderer.
 
-Use a local repository/storage adapter, with atomic transactions and explicit schema migrations. SwiftData is the proposed initial adapter, not a dependency of business rules. Do not build speculative microservices, a plugin system, generic challenge language, or an unused live-sharing backend.
+Use a local repository/storage adapter, with atomic transactions and explicit schema migrations. The implemented adapter is an atomic JSON repository, not a dependency of business rules. Do not build speculative microservices, a plugin system, generic challenge language, or an unused live-sharing backend.
 
 ### 12.3 Future compatibility boundaries
 
@@ -442,7 +465,7 @@ Future accounts, authorization, synchronization, conflict resolution, revocation
 
 **DATA-01:** Manual entry, review, history, sharing preparation, and settlement recording work offline. Every acknowledged save survives termination/relaunch. New installations start empty. Synthetic preview/test data never enters a production store.
 
-**DATA-02:** Provide `Export backup` and `Restore backup` in Settings. The versioned JSON envelope contains the complete profile, plans, revisions, agreements, assessments, events, settlements, and preferences with IDs preserved. A share snapshot is not a backup. Export explicitly warns that the file includes private activity and financial information and is not encrypted by Bloomed.
+**DATA-02:** Provide `Export backup` and `Restore backup` in Settings. The versioned JSON envelope contains the complete profile, plans, revisions, agreements, assessments, events, settlements, and preferences with IDs preserved, including any additive charity destination. Preserve schema-v1 compatibility: the destination collection and setup-flow version are optional when decoding older installations/backups. Missing collections mean no deferred choices; never manufacture records. A share snapshot is not a backup. Export explicitly warns that the file includes private activity and financial information and is not encrypted by Bloomed.
 
 **DATA-03:** Restore validates file type/version, IDs and references, integer bounds, date semantics, rule versions, and accounting identities before changing storage. Recompute and compare derivable assessments. Reject incompatible, corrupt, or inconsistent data without partial import. Restore replaces the store after clear confirmation; no merge behavior in MVP. Offer backup of current data first. Save atomically; a failed restore leaves existing records intact. Import never executes a payment or marks anything newly verified.
 
@@ -508,4 +531,5 @@ Do not stop at an attractive dashboard with simulated balances. The definition o
 
 ## 18. Change log
 
+- **0.2 — 2026-10-25:** Authorized walkthrough improvements: amount-before-options setup, explicit higher-goal tradeoff, optional setup charity with immutable later choice, responsive draft persistence, separated supporter actions, purposeful states, and Week/Month walking history. Formulas, rule version, and fixtures unchanged. Test evidence is reported separately.
 - **0.1 — 2026-10-24:** First standalone development specification. Consolidates walking plans, personal commitment, optional matching and consistency, snapshots, weekly history, recurrence records, and explicit implementation defaults. Prepared for review; no application code created.

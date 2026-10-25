@@ -43,7 +43,7 @@ struct SettingsView: View {
                         .padding(.vertical, 4)
                         .accessibilityHidden(true)
                     Text("A walking commitment, one week at a time.")
-                    Text("Manual activity records. External money and verification. Bloomed does not upload your records. Device backups may include app data according to your iOS settings.")
+                    Text("You enter your steps. Bloomed calculates the amounts; you arrange money and donations outside the app. Your records stay on this device. Device backups may include app data according to your iOS settings.")
                         .font(.subheadline).foregroundStyle(BTheme.secondary)
                     LabeledContent("Version", value: versionLabel)
                 }
@@ -87,7 +87,7 @@ struct SettingsView: View {
     private var versionLabel: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
-        return "\(version) (\(build)) · First draft"
+        return "\(version) (\(build)) · Review build"
     }
 
     private func savePreferences() {

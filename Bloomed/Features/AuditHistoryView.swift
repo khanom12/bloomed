@@ -5,14 +5,14 @@ struct AuditHistoryView: View {
     let planID: UUID
     var body: some View {
         List {
-            Section("Assessment revisions") {
+            Section("Calculation history") {
                 ForEach(store.state.assessments.filter { $0.planID == planID }.reversed()) { revision in
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(revision.reviewedAt == nil ? "Provisional revision" : "Reviewed revision").font(.headline)
+                        Text(revision.reviewedAt == nil ? "Calculation not yet reviewed" : "Reviewed revision").font(.headline)
                         Text(revision.createdAt.formatted(date: .abbreviated, time: .shortened)).font(.caption)
-                        BMoneyRow(title: "Personal return", cents: revision.result.personalReturnCents)
-                        BMoneyRow(title: "Charity allocation", cents: revision.result.charityAllocationCents)
-                        BMoneyRow(title: "Supporter reward", cents: revision.result.supporterRewardCents)
+                        BMoneyRow(title: "Your money earned back", cents: revision.result.personalReturnCents)
+                        BMoneyRow(title: "Amount for charity", cents: revision.result.charityAllocationCents)
+                        BMoneyRow(title: "Supporter match", cents: revision.result.supporterRewardCents)
                     }.padding(.vertical, 8)
                 }
             }
